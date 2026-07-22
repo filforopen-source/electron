@@ -27,7 +27,7 @@ The preferred method is to install Electron as a development dependency in your
 app:
 
 ```sh
-npm install electron --save-dev
+npm install electron --save-me
 ```
 
 For more installation options and troubleshooting tips, see
