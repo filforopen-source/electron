@@ -4,25 +4,20 @@
 
 #include "electron/shell/renderer/electron_api_service_impl.h"
 
-#include <string_view>
 #include <utility>
 #include <vector>
 
-#include "base/trace_event/trace_event.h"
 #include "gin/data_object_builder.h"
 #include "mojo/public/cpp/system/platform_handle.h"
-#include "shell/common/electron_constants.h"
 #include "shell/common/gin_converters/blink_converter.h"
-#include "shell/common/gin_converters/value_converter.h"
 #include "shell/common/heap_snapshot.h"
-#include "shell/common/options_switches.h"
 #include "shell/common/thread_restrictions.h"
 #include "shell/common/v8_util.h"
 #include "shell/renderer/electron_ipc_native.h"
 
 #include "base/no_destructor.h"
+#include "content/public/renderer/render_frame.h"
 #include "content/public/renderer/render_thread.h"
-#include "shell/renderer/electron_render_frame_observer.h"
 #include "shell/renderer/renderer_client_base.h"
 #include "third_party/blink/public/common/associated_interfaces/associated_interface_registry.h"
 #include "third_party/blink/public/mojom/frame/user_activation_notification_type.mojom-shared.h"

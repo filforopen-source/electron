@@ -11,7 +11,6 @@
 #include <utility>
 
 #include "base/apple/bundle_locations.h"
-#include "base/base_switches.h"
 #include "base/command_line.h"
 #include "base/debug/leak_annotations.h"
 #include "base/debug/stack_trace.h"
@@ -22,7 +21,6 @@
 #include "base/path_service.h"
 #include "base/strings/cstring_view.h"
 #include "base/strings/string_number_conversions.cc"
-#include "base/strings/string_util_internal.h"
 #include "chrome/common/chrome_paths.h"
 #include "chrome/common/chrome_switches.h"
 #include "chrome/common/profiler/process_type.h"
@@ -48,7 +46,6 @@
 #include "shell/browser/relauncher.h"
 #include "shell/common/electron_paths.h"
 #include "shell/common/logging.h"
-#include "shell/common/options_switches.h"
 #include "shell/common/process_util.h"
 #include "shell/renderer/electron_renderer_client.h"
 #include "shell/renderer/electron_sandboxed_renderer_client.h"
@@ -84,7 +81,6 @@
 #include "components/crash/core/common/crash_key.h"
 #include "components/crash/core/common/crash_keys.h"
 #include "shell/app/electron_crash_reporter_client.h"
-#include "shell/browser/api/electron_api_crash_reporter.h"
 #include "shell/common/crash_keys.h"
 #endif
 

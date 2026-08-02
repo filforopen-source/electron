@@ -118,12 +118,6 @@ class SimpleURLLoaderWrapper final
       OnClearSiteDataCallback callback) override;
   void OnLoadingStateUpdate(network::mojom::LoadInfoPtr info,
                             OnLoadingStateUpdateCallback callback) override;
-  void OnSharedStorageHeaderReceived(
-      const url::Origin& request_origin,
-      std::vector<network::mojom::SharedStorageModifierMethodWithOptionsPtr>
-          methods,
-      const std::optional<std::string>& with_lock,
-      OnSharedStorageHeaderReceivedCallback callback) override;
   void OnDataUseUpdate(int32_t network_traffic_annotation_id_hash,
                        base::ByteSize recv_bytes,
                        base::ByteSize sent_bytes) override {}
@@ -138,9 +132,6 @@ class SimpleURLLoaderWrapper final
       network::mojom::IPAddressSpace response_address_space,
       network::mojom::IPAddressSpace client_address_space,
       network::mojom::IPAddressSpace target_address_space) override {}
-  void OnAdAuctionEventRecordHeaderReceived(
-      network::AdAuctionEventRecord event_record,
-      const std::optional<url::Origin>& top_frame_origin) override {}
 
   scoped_refptr<network::SharedURLLoaderFactory> GetURLLoaderFactoryForURL(
       const GURL& url);
