@@ -11,8 +11,6 @@
 
 #include "base/task/single_thread_task_runner.h"
 #include "components/prefs/scoped_user_pref_update.h"
-#include "content/public/common/color_parser.h"
-#include "electron/buildflags/buildflags.h"
 #include "gin/dictionary.h"
 #include "shell/browser/api/electron_api_menu.h"
 #include "shell/browser/api/electron_api_view.h"
@@ -102,6 +100,11 @@ v8::Local<v8::Value> ToBuffer(v8::Isolate* isolate,
 
 BaseWindow::BaseWindow(v8::Isolate* isolate,
                        const gin_helper::Dictionary& options) {
+  // make sure we don't override title on back/forward navigation
+  // if the title is provided
+  if (std::string title; options.Get(options::kTitle, &title))
+    title_set_from_api_ = true;
+
   // The parent window.
   gin_helper::Handle<BaseWindow> parent;
   if (options.Get("parent", &parent) && !parent.IsEmpty())
@@ -237,10 +240,14 @@ void BaseWindow::OnWindowHide() {
 }
 
 void BaseWindow::OnWindowMaximize() {
+  // Persist the display mode; bounds events fired during the transition
+  // are skipped by SaveWindowState, so nothing else would.
+  window_->DebouncedSaveWindowState();
   Emit("maximize");
 }
 
 void BaseWindow::OnWindowUnmaximize() {
+  window_->DebouncedSaveWindowState();
   Emit("unmaximize");
 }
 
@@ -291,10 +298,12 @@ void BaseWindow::OnWindowMoved() {
 }
 
 void BaseWindow::OnWindowEnterFullScreen() {
+  window_->DebouncedSaveWindowState();
   Emit("enter-full-screen");
 }
 
 void BaseWindow::OnWindowLeaveFullScreen() {
+  window_->DebouncedSaveWindowState();
   Emit("leave-full-screen");
 }
 
@@ -618,7 +627,22 @@ void BaseWindow::MoveTop() {
 }
 
 void BaseWindow::SetTitle(const std::string& title) {
+  title_set_from_api_ = true;
   window_->SetTitle(title);
+}
+
+void BaseWindow::SetTitleFromPage(const std::string& title) {
+  title_set_from_api_ = false;
+  window_->SetTitle(title);
+}
+
+bool BaseWindow::SetTitleFromPageIfNotSetFromApi(const std::string& title) {
+  if (title_set_from_api_) {
+    return false;
+  } else {
+    SetTitleFromPage(title);
+    return true;
+  }
 }
 
 std::string BaseWindow::GetTitle() const {

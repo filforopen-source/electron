@@ -18,7 +18,6 @@
 #include "shell/browser/api/electron_api_session.h"
 #include "shell/browser/api/electron_api_utility_process.h"
 #include "shell/browser/api/electron_api_web_contents.h"
-#include "third_party/blink/public/mojom/ai/ai_classifier.mojom.h"
 #include "third_party/blink/public/mojom/ai/ai_common.mojom.h"
 #include "third_party/blink/public/mojom/ai/ai_language_model.mojom.h"
 #include "third_party/blink/public/mojom/ai/ai_proofreader.mojom.h"
@@ -59,10 +58,10 @@ ProxyingAIManager::GetAIManagerRemote() {
     gin::WeakCell<api::Session>* session =
         api::Session::FromBrowserContext(browser_context_);
 
-    if (session && session->Get() && session->Get()->LocalAIHandler()) {
-      auto* rfh = rfh_.AsRenderFrameHostIfValid();
-      DCHECK(rfh);
-
+    // Requests that don't come from a live document (e.g. workers) are not
+    // routed to the handler; callers treat an unbound remote as unavailable.
+    auto* rfh = rfh_.AsRenderFrameHostIfValid();
+    if (rfh && session && session->Get() && session->Get()->LocalAIHandler()) {
       auto* web_contents = electron::api::WebContents::From(
           content::WebContents::FromRenderFrameHost(rfh));
       std::optional<int32_t> web_contents_id;
@@ -181,20 +180,6 @@ void ProxyingAIManager::CreateProofreader(
   NOTIMPLEMENTED();
 }
 
-void ProxyingAIManager::CanCreateClassifier(
-    blink::mojom::AIClassifierCreateOptionsPtr options,
-    CanCreateClassifierCallback callback) {
-  std::move(callback).Run(
-      blink::mojom::ModelAvailabilityCheckResult::kUnavailableUnknown);
-}
-
-void ProxyingAIManager::CreateClassifier(
-    mojo::PendingRemote<blink::mojom::AIManagerCreateClassifierClient> client,
-    blink::mojom::AIClassifierCreateOptionsPtr options,
-    mojo::PendingRemote<on_device_model::mojom::DownloadObserver> monitor) {
-  NOTIMPLEMENTED();
-}
-
 void ProxyingAIManager::CanCreateSemanticEmbedder(
     CanCreateSemanticEmbedderCallback callback) {
   std::move(callback).Run(
@@ -203,7 +188,8 @@ void ProxyingAIManager::CanCreateSemanticEmbedder(
 
 void ProxyingAIManager::CreateSemanticEmbedder(
     mojo::PendingRemote<blink::mojom::AIManagerCreateSemanticEmbedderClient>
-        client) {
+        client,
+    mojo::PendingRemote<on_device_model::mojom::DownloadObserver> monitor) {
   NOTIMPLEMENTED();
 }
 

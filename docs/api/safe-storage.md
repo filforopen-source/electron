@@ -8,9 +8,9 @@ This module adds extra protection to data being stored on disk by using OS-provi
 security semantics for each platform are outlined below.
 
 > [!NOTE]
-> We recommend using the asynchronous API (`encryptStringAsync`/`decryptStringAsync`) over the synchronous API.
-> The async API is non-blocking, supports key rotation, and handles temporary unavailability gracefully.
-> The synchronous API may be deprecated in a future version of Electron.
+> The synchronous API (`isEncryptionAvailable`/`encryptString`/`decryptString`) is deprecated and will be
+> removed in Electron 46. Use the asynchronous API (`isAsyncEncryptionAvailable`/`encryptStringAsync`/`decryptStringAsync`),
+> which is non-blocking, supports key rotation, and handles temporary unavailability gracefully.
 
 ## Platform-Specific Key Providers
 
@@ -27,6 +27,12 @@ security semantics of content protected via the `safeStorage` API vary between w
 Note that on macOS, access to the system Keychain is required and
 these calls can block the current thread to collect user input.
 The same is true for Linux, if a password management tool is available.
+
+> [!IMPORTANT]
+> On macOS, your app should be [code signed](../tutorial/code-signing.md#macos-apis-that-require-code-signing)
+> for `safeStorage` to behave consistently. Without a valid, consistent signature,
+> macOS may not recognize different builds of your app as the same application,
+> which can cause the Keychain to re-prompt the user for permission on every update.
 
 ### Asynchronous API
 
@@ -49,13 +55,23 @@ The `safeStorage` module emits the following events:
 
 The `safeStorage` module has the following methods:
 
-### `safeStorage.isEncryptionAvailable()`
+### `safeStorage.isEncryptionAvailable()` _Deprecated_
+
+<!--
+```YAML history
+deprecated:
+  - pr-url: https://github.com/electron/electron/pull/53670
+    breaking-changes-header: deprecated-safestorageisencryptionavailable-safestorageencryptstring-and-safestoragedecryptstring
+```
+-->
 
 Returns `boolean` - Whether encryption is available.
 
 On Linux, returns true if the app has emitted the `ready` event and the secret key is available.
 On MacOS, returns true if Keychain is available.
 On Windows, returns true once the app has emitted the `ready` event.
+
+**Deprecated:** Use [`safeStorage.isAsyncEncryptionAvailable()`](#safestorageisasyncencryptionavailable) instead.
 
 ### `safeStorage.isAsyncEncryptionAvailable()`
 
@@ -66,7 +82,15 @@ The asynchronous encryptor is initialized lazily the first time this method,
 `encryptStringAsync`, or `decryptStringAsync` is called after the app is ready.
 The returned promise resolves once initialization completes.
 
-### `safeStorage.encryptString(plainText)`
+### `safeStorage.encryptString(plainText)` _Deprecated_
+
+<!--
+```YAML history
+deprecated:
+  - pr-url: https://github.com/electron/electron/pull/53670
+    breaking-changes-header: deprecated-safestorageisencryptionavailable-safestorageencryptstring-and-safestoragedecryptstring
+```
+-->
 
 * `plainText` string
 
@@ -74,12 +98,25 @@ Returns `Buffer` -  An array of bytes representing the encrypted string.
 
 This function will throw an error if encryption fails.
 
-### `safeStorage.decryptString(encrypted)`
+**Deprecated:** Use [`safeStorage.encryptStringAsync(plainText)`](#safestorageencryptstringasyncplaintext) instead.
+
+### `safeStorage.decryptString(encrypted)` _Deprecated_
+
+<!--
+```YAML history
+deprecated:
+  - pr-url: https://github.com/electron/electron/pull/53670
+    breaking-changes-header: deprecated-safestorageisencryptionavailable-safestorageencryptstring-and-safestoragedecryptstring
+```
+-->
 
 * `encrypted` Buffer
 
 Returns `string` - the decrypted string. Decrypts the encrypted buffer
 obtained  with `safeStorage.encryptString` back into a string.
+
+**Deprecated:** Use [`safeStorage.decryptStringAsync(encrypted)`](#safestoragedecryptstringasyncencrypted) instead.
+Data encrypted with `safeStorage.encryptString` can be decrypted with `safeStorage.decryptStringAsync`.
 
 ### `safeStorage.encryptStringAsync(plainText)`
 

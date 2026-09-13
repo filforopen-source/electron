@@ -6,7 +6,6 @@
 
 #include <fcntl.h>
 
-#include <stdio.h>
 #include <memory>
 #include <optional>
 #include <queue>
@@ -15,7 +14,6 @@
 
 #include <gdk/gdk.h>
 
-#include "base/cancelable_callback.h"
 #include "base/environment.h"
 #include "base/files/file_util.h"
 #include "base/files/scoped_file.h"
@@ -27,8 +25,6 @@
 #include "base/process/kill.h"
 #include "base/process/launch.h"
 #include "base/run_loop.h"
-#include "base/strings/escape.h"
-#include "base/strings/string_util.h"
 #include "base/task/thread_pool.h"
 #include "base/threading/thread_restrictions.h"
 #include "base/types/expected.h"
@@ -334,8 +330,11 @@ bool XDGUtil(const std::vector<std::string>& argv,
   options.environment["MM_NOTTTY"] = "1";
 
   base::Process process = base::LaunchProcess(argv, options);
-  if (!process.IsValid())
+  if (!process.IsValid()) {
+    if (!callback.is_null())
+      std::move(callback).Run("Failed to launch " + argv[0]);
     return false;
+  }
 
   if (wait_for_exit) {
     base::ScopedAllowBaseSyncPrimitivesForTesting
@@ -348,6 +347,9 @@ bool XDGUtil(const std::vector<std::string>& argv,
   }
 
   base::EnsureProcessGetsReaped(std::move(process));
+  // Not waiting for the exit code, so report success once it has launched.
+  if (!callback.is_null())
+    std::move(callback).Run("");
   return true;
 }
 

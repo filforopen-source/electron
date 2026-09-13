@@ -255,10 +255,11 @@ Returns:
   * `frame` WebFrameMain | null - The frame to be navigated.
     May be `null` if accessed after the frame has either navigated or been destroyed.
   * `initiator` WebFrameMain | null (optional) - The frame which initiated the
-    navigation, which can be a parent frame (e.g. via `window.open` with a
-    frame's name), or null if the navigation was not initiated by a frame. This
-    can also be null if the initiating frame was deleted before the event was
-    emitted.
+    navigation. This can be a parent frame (e.g. via `window.open` with a
+    frame's name), a child frame (e.g. an unsandboxed iframe navigating its
+    parent via `<a target="_top">`), or null if the navigation was not initiated
+    by a frame. This can also be null if the initiating frame was deleted before
+    the event was emitted.
 * `url` string _Deprecated_
 * `isInPlace` boolean _Deprecated_
 * `isMainFrame` boolean _Deprecated_
@@ -289,10 +290,11 @@ Returns:
   * `frame` WebFrameMain | null - The frame to be navigated.
     May be `null` if accessed after the frame has either navigated or been destroyed.
   * `initiator` WebFrameMain | null (optional) - The frame which initiated the
-    navigation, which can be a parent frame (e.g. via `window.open` with a
-    frame's name), or null if the navigation was not initiated by a frame. This
-    can also be null if the initiating frame was deleted before the event was
-    emitted.
+    navigation. This can be a parent frame (e.g. via `window.open` with a
+    frame's name), a child frame (e.g. an unsandboxed iframe navigating its
+    parent via `<a target="_top">`), or null if the navigation was not initiated
+    by a frame. This can also be null if the initiating frame was deleted before
+    the event was emitted.
 
 Emitted when a user or the page wants to start navigation in any frame. It can happen when
 the `window.location` object is changed or a user clicks a link in the page.
@@ -321,10 +323,11 @@ Returns:
   * `frame` WebFrameMain | null - The frame to be navigated.
     May be `null` if accessed after the frame has either navigated or been destroyed.
   * `initiator` WebFrameMain | null (optional) - The frame which initiated the
-    navigation, which can be a parent frame (e.g. via `window.open` with a
-    frame's name), or null if the navigation was not initiated by a frame. This
-    can also be null if the initiating frame was deleted before the event was
-    emitted.
+    navigation. This can be a parent frame (e.g. via `window.open` with a
+    frame's name), a child frame (e.g. an unsandboxed iframe navigating its
+    parent via `<a target="_top">`), or null if the navigation was not initiated
+    by a frame. This can also be null if the initiating frame was deleted before
+    the event was emitted.
 * `url` string _Deprecated_
 * `isInPlace` boolean _Deprecated_
 * `isMainFrame` boolean _Deprecated_
@@ -346,10 +349,11 @@ Returns:
   * `frame` WebFrameMain | null - The frame to be navigated.
     May be `null` if accessed after the frame has either navigated or been destroyed.
   * `initiator` WebFrameMain | null (optional) - The frame which initiated the
-    navigation, which can be a parent frame (e.g. via `window.open` with a
-    frame's name), or null if the navigation was not initiated by a frame. This
-    can also be null if the initiating frame was deleted before the event was
-    emitted.
+    navigation. This can be a parent frame (e.g. via `window.open` with a
+    frame's name), a child frame (e.g. an unsandboxed iframe navigating its
+    parent via `<a target="_top">`), or null if the navigation was not initiated
+    by a frame. This can also be null if the initiating frame was deleted before
+    the event was emitted.
 * `url` string _Deprecated_
 * `isInPlace` boolean _Deprecated_
 * `isMainFrame` boolean _Deprecated_
@@ -378,10 +382,11 @@ Returns:
   * `frame` WebFrameMain | null - The frame to be navigated.
     May be `null` if accessed after the frame has either navigated or been destroyed.
   * `initiator` WebFrameMain | null (optional) - The frame which initiated the
-    navigation, which can be a parent frame (e.g. via `window.open` with a
-    frame's name), or null if the navigation was not initiated by a frame. This
-    can also be null if the initiating frame was deleted before the event was
-    emitted.
+    navigation. This can be a parent frame (e.g. via `window.open` with a
+    frame's name), a child frame (e.g. an unsandboxed iframe navigating its
+    parent via `<a target="_top">`), or null if the navigation was not initiated
+    by a frame. This can also be null if the initiating frame was deleted before
+    the event was emitted.
 * `url` string _Deprecated_
 * `isInPlace` boolean _Deprecated_
 * `isMainFrame` boolean _Deprecated_
@@ -688,6 +693,10 @@ Returns:
 * `event` Event
 * `authenticationResponseDetails` Object
   * `url` URL
+  * `pid` number
+  * `isRequestForNavigation` boolean - Indicates whether the request is for a navigation.
+  * `firstAuthAttempt` boolean - Indicates whether this is the first authentication attempt.
+  * `responseHeaders` Record\<string, string | string[]\> (optional) - The headers returned in the response.
 * `authInfo` Object
   * `isProxy` boolean
   * `scheme` string
@@ -917,6 +926,15 @@ app.whenReady().then(() => {
 
 #### Event: 'paint'
 
+<!--
+```YAML history
+changes:
+  - pr-url: https://github.com/electron/electron/pull/53813
+    description: "`image` now has the view's device scale factor, so `image.getSize()` is in DIPs."
+    breaking-changes-header: behavior-changed-captured-page-images-have-the-pages-scale-factor
+```
+-->
+
 Returns:
 
 * `details` Event\<\>
@@ -925,6 +943,8 @@ Returns:
 * `image` [NativeImage](native-image.md) - The image data of the whole frame.
 
 Emitted when a new frame is generated. Only the dirty area is passed in the buffer.
+`image` has the view's device scale factor, so `image.getSize()` is in DIPs, while
+`dirtyRect` is in the pixels of `image.toBitmap()`.
 
 ```js
 const { BrowserWindow } = require('electron')
@@ -1528,6 +1548,30 @@ Returns `boolean` - Whether this page has been muted.
 
 Returns `boolean` - Whether audio is currently playing.
 
+#### `contents.setCaretBrowsingEnabled(enabled)`
+
+<!--
+```YAML history
+added:
+  - pr-url: https://github.com/electron/electron/pull/52696
+```
+-->
+
+* `enabled` boolean
+
+Sets whether [caret browsing](#contentscaretbrowsingenabled) is enabled on the current web page.
+
+#### `contents.isCaretBrowsingEnabled()`
+
+<!--
+```YAML history
+added:
+  - pr-url: https://github.com/electron/electron/pull/52696
+```
+-->
+
+Returns `boolean` - Whether [caret browsing](#contentscaretbrowsingenabled) is enabled for this page.
+
 #### `contents.setZoomFactor(factor)`
 
 * `factor` Double - Zoom factor; default is 1.0.
@@ -1771,6 +1815,15 @@ console.log(requestId)
 
 #### `contents.capturePage([rect, opts])`
 
+<!--
+```YAML history
+changes:
+  - pr-url: https://github.com/electron/electron/pull/53813
+    description: "The image now has the page's device scale factor, so `image.getSize()` is in DIPs."
+    breaking-changes-header: behavior-changed-captured-page-images-have-the-pages-scale-factor
+```
+-->
+
 * `rect` [Rectangle](structures/rectangle.md) (optional) - The area of the page to be captured.
 * `opts` Object (optional)
   * `stayHidden` boolean (optional) -  Keep the page hidden instead of visible. Default is `false`.
@@ -1781,6 +1834,7 @@ Returns `Promise<NativeImage>` - Resolves with a [NativeImage](native-image.md)
 Captures a snapshot of the page within `rect`. Omitting `rect` will capture the whole visible page.
 The page is considered visible when its browser window is hidden and the capturer count is non-zero.
 If you would like the page to stay hidden, you should ensure that `stayHidden` is set to true.
+The image has the page's device scale factor (for offscreen rendering, `webPreferences.offscreen.deviceScaleFactor`), so `image.getSize()` is in DIPs and `image.toBitmap()` holds the full-resolution pixels.
 
 #### `contents.isBeingCaptured()`
 
@@ -1860,24 +1914,7 @@ win.webContents.print(options, (success, errorType) => {
 
 #### `contents.printToPDF(options)`
 
-* `options` Object
-  * `landscape` boolean (optional) - Paper orientation.`true` for landscape, `false` for portrait. Defaults to false.
-  * `displayHeaderFooter` boolean (optional) - Whether to display header and footer. Defaults to false.
-  * `printBackground` boolean (optional) - Whether to print background graphics. Defaults to false.
-  * `scale` number(optional)  - Scale of the webpage rendering. Defaults to 1.
-  * `pageSize` string | Size (optional) - Specify page size of the generated PDF. Can be `A0`, `A1`, `A2`, `A3`,
-  `A4`, `A5`, `A6`, `Legal`, `Letter`, `Tabloid`, `Ledger`, or an Object containing `height` and `width` in inches. Defaults to `Letter`.
-  * `margins` Object (optional)
-    * `top` number (optional) - Top margin in inches. Defaults to 1cm (~0.4 inches).
-    * `bottom` number (optional) - Bottom margin in inches. Defaults to 1cm (~0.4 inches).
-    * `left` number (optional) - Left margin in inches. Defaults to 1cm (~0.4 inches).
-    * `right` number (optional) - Right margin in inches. Defaults to 1cm (~0.4 inches).
-  * `pageRanges` string (optional) - Page ranges to print, e.g., '1-5, 8, 11-13'. Defaults to the empty string, which means print all pages.
-  * `headerTemplate` string (optional) - HTML template for the print header. Should be valid HTML markup with following classes used to inject printing values into them: `date` (formatted print date), `title` (document title), `url` (document location), `pageNumber` (current page number) and `totalPages` (total pages in the document). For example, `<span class=title></span>` would generate span containing the title.
-  * `footerTemplate` string (optional) - HTML template for the print footer. Should use the same format as the `headerTemplate`.
-  * `preferCSSPageSize` boolean (optional) - Whether or not to prefer page size as defined by css. Defaults to false, in which case the content will be scaled to fit the paper size.
-  * `generateTaggedPDF` boolean (optional) _Experimental_ - Whether or not to generate a tagged (accessible) PDF. Defaults to false. As this property is experimental, the generated PDF may not adhere fully to PDF/UA and WCAG standards.
-  * `generateDocumentOutline` boolean (optional) _Experimental_ - Whether or not to generate a PDF document outline from content headers. Defaults to false.
+* `options` [PrintToPDFOptions](structures/print-to-pdf-options.md?inline)
 
 Returns `Promise<Buffer>` - Resolves with the generated PDF data.
 
@@ -2160,6 +2197,15 @@ Sends an input `event` to the page.
 
 #### `contents.beginFrameSubscription([onlyDirty ,]callback)`
 
+<!--
+```YAML history
+changes:
+  - pr-url: https://github.com/electron/electron/pull/53813
+    description: "The image now has the page's device scale factor, so `image.getSize()` is in DIPs."
+    breaking-changes-header: behavior-changed-captured-page-images-have-the-pages-scale-factor
+```
+-->
+
 * `onlyDirty` boolean (optional) - Defaults to `false`.
 * `callback` Function
   * `image` [NativeImage](native-image.md)
@@ -2170,7 +2216,8 @@ will be called with `callback(image, dirtyRect)` when there is a presentation
 event.
 
 The `image` is an instance of [NativeImage](native-image.md) that stores the
-captured frame.
+captured frame. It has the page's device scale factor, so `image.getSize()` is
+in DIPs, while `dirtyRect` is in the pixels of `image.toBitmap()`.
 
 The `dirtyRect` is an object with `x, y, width, height` properties that
 describes which part of the page was repainted. If `onlyDirty` is set to
@@ -2309,6 +2356,10 @@ Setting the WebRTC UDP Port Range allows you to restrict the udp port range used
 Returns `string` - The identifier of a WebContents stream. This identifier can be used
 with `navigator.mediaDevices.getUserMedia` using a `chromeMediaSource` of `tab`.
 The identifier is restricted to the web contents that it is registered to and is only valid for 10 seconds.
+The `desktop` source only accepts screen and window identifiers from
+[`desktopCapturer.getSources`](desktop-capturer.md#desktopcapturergetsourcesoptions);
+to capture a WebContents use this identifier with the `tab` source, or
+[`ses.setDisplayMediaRequestHandler`](session.md#sessetdisplaymediarequesthandlerhandler-opts).
 
 #### `contents.getOrCreateDevToolsTargetId()`
 
@@ -2426,6 +2477,29 @@ register handlers on the appropriate frame directly using the
 #### `contents.audioMuted`
 
 A `boolean` property that determines whether this page is muted.
+
+#### `contents.caretBrowsingEnabled`
+
+<!--
+```YAML history
+added:
+  - pr-url: https://github.com/electron/electron/pull/52696
+```
+-->
+
+A `boolean` property that determines whether caret browsing is enabled for this page.
+
+When enabled, a movable cursor is placed in the page's text, allowing the user to navigate and select content with the keyboard. Changes apply to the live page without reloading it.
+
+A `<webview>` guest inherits this value from its embedder when it is created and
+then tracks it independently, so disabling caret browsing on the embedder leaves
+an existing guest enabled.
+
+While any `WebContents` in the process has caret browsing enabled, assistive
+technology is notified process-wide that caret browsing is active, so that screen
+readers report the caret's position as it moves. That notification is only
+withdrawn once every `WebContents` that enabled caret browsing has either
+disabled it or been destroyed.
 
 #### `contents.userAgent`
 

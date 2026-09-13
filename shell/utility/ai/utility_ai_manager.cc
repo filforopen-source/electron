@@ -8,6 +8,7 @@
 #include <utility>
 
 #include "base/containers/fixed_flat_map.h"
+#include "base/functional/callback_helpers.h"
 #include "base/notimplemented.h"
 #include "mojo/public/cpp/bindings/unique_receiver_set.h"
 #include "shell/browser/javascript_environment.h"
@@ -20,7 +21,6 @@
 #include "shell/utility/ai/utility_ai_language_model.h"
 #include "shell/utility/api/electron_api_local_ai_handler.h"
 #include "third_party/abseil-cpp/absl/container/flat_hash_map.h"
-#include "third_party/blink/public/mojom/ai/ai_classifier.mojom.h"
 #include "third_party/blink/public/mojom/ai/ai_common.mojom.h"
 #include "third_party/blink/public/mojom/ai/ai_language_model.mojom.h"
 #include "third_party/blink/public/mojom/ai/ai_proofreader.mojom.h"
@@ -164,13 +164,17 @@ void UtilityAIManager::OnCreateLanguageModelClientDisconnect(
   if (it != abort_controllers_.end()) {
     v8::Isolate* isolate = JavascriptEnvironment::GetIsolate();
     v8::HandleScope scope{isolate};
-    if (description.empty()) {
-      gin_helper::CallMethod(isolate, it->second.Get(isolate), "abort");
-    } else {
-      gin_helper::CallMethod(isolate, it->second.Get(isolate), "abort",
-                             description);
-    }
+    // abort() runs the signal's listeners and then a microtask checkpoint,
+    // which may settle the pending create() promise and erase this entry
+    // from |abort_controllers_|. Take the controller out of the map first so
+    // we are not holding an iterator across the call.
+    v8::Local<v8::Object> abort_controller = it->second.Get(isolate);
     abort_controllers_.erase(it);
+    if (description.empty()) {
+      gin_helper::CallMethod(isolate, abort_controller, "abort");
+    } else {
+      gin_helper::CallMethod(isolate, abort_controller, "abort", description);
+    }
   }
 }
 
@@ -541,20 +545,6 @@ void UtilityAIManager::CreateProofreader(
   NOTIMPLEMENTED();
 }
 
-void UtilityAIManager::CanCreateClassifier(
-    blink::mojom::AIClassifierCreateOptionsPtr options,
-    CanCreateClassifierCallback callback) {
-  std::move(callback).Run(
-      blink::mojom::ModelAvailabilityCheckResult::kUnavailableUnknown);
-}
-
-void UtilityAIManager::CreateClassifier(
-    mojo::PendingRemote<blink::mojom::AIManagerCreateClassifierClient> client,
-    blink::mojom::AIClassifierCreateOptionsPtr options,
-    mojo::PendingRemote<on_device_model::mojom::DownloadObserver> monitor) {
-  NOTIMPLEMENTED();
-}
-
 void UtilityAIManager::CanCreateSemanticEmbedder(
     CanCreateSemanticEmbedderCallback callback) {
   std::move(callback).Run(
@@ -563,7 +553,8 @@ void UtilityAIManager::CanCreateSemanticEmbedder(
 
 void UtilityAIManager::CreateSemanticEmbedder(
     mojo::PendingRemote<blink::mojom::AIManagerCreateSemanticEmbedderClient>
-        client) {
+        client,
+    mojo::PendingRemote<on_device_model::mojom::DownloadObserver> monitor) {
   NOTIMPLEMENTED();
 }
 

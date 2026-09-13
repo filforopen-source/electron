@@ -17,16 +17,15 @@
 #include "base/memory/weak_ptr.h"
 #include "base/observer_list.h"
 #include "base/strings/cstring_view.h"
-#include "base/supports_user_data.h"
 #include "base/timer/timer.h"
 #include "content/public/browser/desktop_media_id.h"
 #include "content/public/browser/web_contents_user_data.h"
 #include "extensions/browser/app_window/size_constraints.h"
 #include "shell/browser/native_window_observer.h"
 #include "third_party/abseil-cpp/absl/container/flat_hash_set.h"
+#include "ui/views/view_tracker.h"
 #include "ui/views/widget/widget_delegate.h"
 
-class SkRegion;
 class DraggableRegionProvider;
 class PrefService;
 
@@ -191,6 +190,8 @@ class NativeWindow : public views::WidgetDelegate {
   virtual bool HasShadow() const = 0;
   virtual void SetOpacity(const double opacity) = 0;
   virtual double GetOpacity() const = 0;
+  // NaN is treated as fully opaque, then the value is clamped to [0, 1].
+  static double ClampOpacity(double opacity);
   virtual void SetRepresentedFilename(const std::string& filename) {}
   virtual std::string GetRepresentedFilename() const;
   virtual void SetDocumentEdited(bool edited) {}
@@ -408,18 +409,14 @@ class NativeWindow : public views::WidgetDelegate {
 
   [[nodiscard]] bool has_frame() const { return has_frame_; }
 
-  NativeWindow* parent() const { return parent_; }
+  NativeWindow* parent() const { return parent_.get(); }
 
   [[nodiscard]] bool is_modal() const { return is_modal_; }
 
   [[nodiscard]] constexpr int32_t window_id() const { return window_id_; }
 
-  InspectableWebContentsView* primary_web_contents_view() const {
-    return primary_web_contents_view_;
-  }
-  void set_primary_web_contents_view(InspectableWebContentsView* view) {
-    primary_web_contents_view_ = view;
-  }
+  InspectableWebContentsView* primary_web_contents_view();
+  void InitPrimaryWebContentsView(InspectableWebContentsView* view);
 
   void add_child_window(NativeWindow* child) {
     child_windows_.push_back(child);
@@ -454,6 +451,11 @@ class NativeWindow : public views::WidgetDelegate {
   // Flushes save_window_state_timer_ that was queued by
   // DebouncedSaveWindowState. This does NOT flush the actual disk write.
   void FlushWindowState();
+  // Fires save_window_state_timer_ now if DebouncedSaveWindowState started it,
+  // so the electron_common_testing binding can make the debounced save
+  // deterministic in specs. Unlike FlushWindowState this has no other side
+  // effects, and it does NOT flush the actual disk write either.
+  void FlushPendingWindowStateSaveForTesting();
 
   // Restores window state - bounds first and then display mode.
   void RestoreWindowState(const gin_helper::Dictionary& options);
@@ -575,8 +577,9 @@ class NativeWindow : public views::WidgetDelegate {
   double aspect_ratio_ = 0.0;
   gfx::Size aspect_ratio_extraSize_;
 
-  // The parent window, it is guaranteed to be valid during this window's life.
-  raw_ptr<NativeWindow> parent_ = nullptr;
+  // The parent window. Held weakly because the parent may be destroyed
+  // before this window (e.g. a modal child whose parent is destroy()ed).
+  base::WeakPtr<NativeWindow> parent_;
 
   bool is_transitioning_fullscreen_ = false;
 
@@ -627,7 +630,7 @@ class NativeWindow : public views::WidgetDelegate {
   // Minimum width of the visible part of a window.
   const int kMinVisibleWidth = 100;
 
-  raw_ptr<InspectableWebContentsView> primary_web_contents_view_ = nullptr;
+  views::ViewTracker primary_web_contents_view_;
 
   base::WeakPtrFactory<NativeWindow> weak_factory_{this};
 };

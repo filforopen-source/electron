@@ -5,17 +5,14 @@
 #include "shell/renderer/electron_sandboxed_renderer_client.h"
 
 #include <iterator>
-#include <vector>
 
-#include "base/base_paths.h"
 #include "base/command_line.h"
 #include "base/process/process_metrics.h"
 #include "content/public/renderer/render_frame.h"
 #include "shell/common/api/electron_bindings.h"
-#include "shell/common/application_info.h"
 #include "shell/common/gin_helper/dictionary.h"
 #include "shell/common/js2c_bundle_ids.h"
-#include "shell/common/node_includes.h"
+#include "shell/common/node_bindings.h"
 #include "shell/common/node_util.h"
 #include "shell/common/options_switches.h"
 #include "shell/renderer/electron_api_service_impl.h"
@@ -23,11 +20,9 @@
 #include "shell/renderer/preload_realm_context.h"
 #include "shell/renderer/preload_utils.h"
 #include "shell/renderer/service_worker_data.h"
-#include "third_party/blink/public/common/web_preferences/web_preferences.h"
 #include "third_party/blink/public/platform/scheduler/web_agent_group_scheduler.h"
-#include "third_party/blink/public/web/blink.h"
-#include "third_party/blink/public/web/web_document.h"
-#include "third_party/electron_node/src/node_binding.h"
+#include "third_party/blink/public/web/web_local_frame.h"
+#include "v8/include/v8-function.h"
 
 namespace electron {
 
@@ -209,8 +204,9 @@ void ElectronSandboxedRendererClient::WillEvaluateServiceWorkerOnWorkerThread(
       context_proxy, v8_isolate, v8_context, service_worker_version_id,
       service_worker_scope, script_url, service_worker_token);
 
-  auto* command_line = base::CommandLine::ForCurrentProcess();
-  if (command_line->HasSwitch(switches::kServiceWorkerPreload)) {
+  // The browser attaches preload data only when the session has service
+  // worker preload scripts registered (GetServiceWorkerStartupData).
+  if (context_proxy->ElectronPreloadData().has_value()) {
     if (!service_worker_data) {
       service_worker_data = new ServiceWorkerData{
           context_proxy, service_worker_version_id, v8_isolate, v8_context};

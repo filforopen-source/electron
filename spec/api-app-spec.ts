@@ -1,7 +1,6 @@
 import { app, BrowserWindow, Menu, session, net as electronNet, WebContents, utilityProcess } from 'electron/main';
 
 import { assert, expect } from 'chai';
-import * as semver from 'semver';
 
 import * as cp from 'node:child_process';
 import { once } from 'node:events';
@@ -199,6 +198,39 @@ describe('app module', () => {
     });
   });
 
+  ifdescribe(process.platform === 'linux' && fs.existsSync('/usr/bin/dbus-daemon'))(
+    'when a D-Bus bus goes away',
+    () => {
+      it('exits cleanly instead of crashing', async () => {
+        const daemon = cp.spawn('dbus-daemon', ['--session', '--nofork', '--print-address']);
+        defer(() => daemon.kill());
+        const [address] = await once(daemon.stdout, 'data');
+        const bus = address.toString().trim();
+        const env = { ...process.env, DBUS_SESSION_BUS_ADDRESS: bus, DBUS_SYSTEM_BUS_ADDRESS: bus };
+
+        const appProcess = cp.spawn(process.execPath, [path.join(fixturesPath, 'api', 'session-bus-lost')], { env });
+        defer(() => appProcess.kill());
+        const exited = once(appProcess, 'exit');
+        await once(appProcess.stdout, 'data');
+        await waitUntil(() => {
+          const names = cp
+            .spawnSync(
+              'dbus-send',
+              ['--session', '--dest=org.freedesktop.DBus', '--print-reply', '/', 'org.freedesktop.DBus.ListNames'],
+              { env }
+            )
+            .stdout.toString();
+          return (names.match(/string ":1\./g) ?? []).length >= 2;
+        });
+
+        daemon.kill();
+        const [code, signal] = await exited;
+        expect(signal).to.be.null();
+        expect(code).to.equal(0);
+      });
+    }
+  );
+
   describe('app.exit(exitCode)', () => {
     let appProcess: cp.ChildProcess | null = null;
 
@@ -234,6 +266,27 @@ describe('app module', () => {
 
       expect(signal).to.equal(null, 'exit signal should be null, if you see this please tag @MarshallOfSound');
       expect(code).to.equal(123, 'exit code should be 123, if you see this please tag @MarshallOfSound');
+    });
+
+    // Exiting before 'ready' leaves browser start-up state unfreed by design,
+    // which LeakSanitizer reports and turns into exit code 1.
+    ifit(!process.env.IS_ASAN)('exits cleanly when called before ready right after loading tls', async () => {
+      const appPath = path.join(fixturesPath, 'api', 'exit-before-ready-after-tls');
+      // This guards against a shutdown race that was lost roughly one run in
+      // five, so go a few rounds.
+      for (let i = 0; i < 15; i++) {
+        appProcess = cp.spawn(process.execPath, [appPath]);
+        let stderr = '';
+        appProcess.stderr!.on('data', (data) => {
+          stderr += data;
+        });
+        const [code, signal] = await once(appProcess, 'exit');
+        appProcess = null;
+        const message = `run ${i}: code=${code} signal=${signal}\n${stderr}`;
+        expect(signal).to.equal(null, message);
+        expect(code).to.equal(123, message);
+        expect(stderr).to.not.match(/Received signal \d+|Ignoring extra certs/, message);
+      }
     });
 
     ifit(['darwin', 'linux'].includes(process.platform))('exits gracefully', async function () {
@@ -345,6 +398,20 @@ describe('app module', () => {
       });
     });
 
+    it('sends and receives data larger than the singleton message buffer', async () => {
+      await testArgumentPassing({
+        args: ['--send-data', '--data-size=300000'],
+        expectedAdditionalData: 'x'.repeat(300000)
+      });
+    });
+
+    ifit(process.platform !== 'win32')('passes long arguments to the second-instance event', async () => {
+      await testArgumentPassing({
+        args: [`--long-arg=${'a'.repeat(50000)}`],
+        expectedAdditionalData: null
+      });
+    });
+
     it('sends and receives numerical data', async () => {
       await testArgumentPassing({
         args: ['--send-data', '--data-content=2'],
@@ -356,6 +423,19 @@ describe('app module', () => {
       await testArgumentPassing({
         args: ['--send-data', '--data-content="data"'],
         expectedAdditionalData: 'data'
+      });
+    });
+
+    it('preserves NUL followed by whitespace in additional data', async () => {
+      // The real invariant here is the V8-serialized format of the data. Using
+      // a string here is just a convenient way to test the invariant.
+      const expectedAdditionalData = {
+        value: 'foo\0\tbar'
+      };
+
+      await testArgumentPassing({
+        args: ['--send-data', `--data-content=${JSON.stringify(expectedAdditionalData)}`],
+        expectedAdditionalData
       });
     });
 
@@ -648,7 +728,7 @@ describe('app module', () => {
   });
 
   describe('app.badgeCount', () => {
-    const platformIsNotSupported = process.platform === 'win32' || process.platform === 'linux';
+    const platformIsSupported = process.platform === 'darwin' || process.platform === 'linux';
 
     const expectedBadgeCount = 42;
 
@@ -656,7 +736,7 @@ describe('app module', () => {
       app.badgeCount = 0;
     });
 
-    ifdescribe(!platformIsNotSupported)('on supported platform', () => {
+    ifdescribe(platformIsSupported)('on supported platform', () => {
       describe('with properties', () => {
         it('sets a badge count', function () {
           app.badgeCount = expectedBadgeCount;
@@ -669,25 +749,11 @@ describe('app module', () => {
           app.setBadgeCount(expectedBadgeCount);
           expect(app.getBadgeCount()).to.equal(expectedBadgeCount);
         });
-        it('sets an non numeric (dot) badge count', function () {
+        // A badge count is required on Linux; only macOS displays a plain
+        // dot when no count is provided.
+        ifit(process.platform === 'darwin')('sets an non numeric (dot) badge count', function () {
           app.setBadgeCount();
           // Badge count should be zero when non numeric (dot) is requested
-          expect(app.getBadgeCount()).to.equal(0);
-        });
-      });
-    });
-
-    ifdescribe(process.platform !== 'win32' && platformIsNotSupported)('on unsupported platform', () => {
-      describe('with properties', () => {
-        it('does not set a badge count', function () {
-          app.badgeCount = 9999;
-          expect(app.badgeCount).to.equal(0);
-        });
-      });
-
-      describe('with functions', () => {
-        it('does not set a badge count)', function () {
-          app.setBadgeCount(9999);
           expect(app.getBadgeCount()).to.equal(0);
         });
       });
@@ -717,8 +783,6 @@ describe('app module', () => {
       '/f',
       '/d'
     ];
-    const productVersion = isMac ? cp.execSync('sw_vers -productVersion').toString().trim() : '';
-    const isVenturaOrHigher = semver.gt(semver.coerce(productVersion) || '0.0.0', '13.0.0');
 
     beforeEach(() => {
       app.setLoginItemSettings({ openAtLogin: false });
@@ -737,21 +801,15 @@ describe('app module', () => {
 
       const settings = app.getLoginItemSettings();
       expect(settings.openAtLogin).to.equal(true);
-      expect(settings.openAsHidden).to.equal(false);
       expect(settings.wasOpenedAtLogin).to.equal(false);
-      expect(settings.wasOpenedAsHidden).to.equal(false);
-      expect(settings.restoreState).to.equal(false);
-      if (isVenturaOrHigher) expect(settings.status).to.equal('enabled');
+      expect(settings.status).to.equal('enabled');
     });
 
     ifit(isWin)('sets and returns the app as a login item (windows)', () => {
       app.setLoginItemSettings({ openAtLogin: true, enabled: true });
       expect(app.getLoginItemSettings()).to.deep.equal({
         openAtLogin: true,
-        openAsHidden: false,
         wasOpenedAtLogin: false,
-        wasOpenedAsHidden: false,
-        restoreState: false,
         executableWillLaunchAtLogin: true,
         launchItems: [
           {
@@ -768,10 +826,7 @@ describe('app module', () => {
       app.setLoginItemSettings({ openAtLogin: true, enabled: false });
       expect(app.getLoginItemSettings()).to.deep.equal({
         openAtLogin: true,
-        openAsHidden: false,
         wasOpenedAtLogin: false,
-        wasOpenedAsHidden: false,
-        restoreState: false,
         executableWillLaunchAtLogin: false,
         launchItems: [
           {
@@ -780,41 +835,6 @@ describe('app module', () => {
             args: [],
             scope: 'user',
             enabled: false
-          }
-        ]
-      });
-    });
-
-    ifit(!isWin)('adds a login item that loads in hidden mode', () => {
-      app.setLoginItemSettings({ openAtLogin: true, openAsHidden: true });
-
-      const settings = app.getLoginItemSettings();
-      expect(settings.openAtLogin).to.equal(true);
-
-      const hasOpenAsHidden = process.platform === 'darwin' && !isVenturaOrHigher;
-      expect(settings.openAsHidden).to.equal(hasOpenAsHidden);
-      expect(settings.wasOpenedAtLogin).to.equal(false);
-      expect(settings.wasOpenedAsHidden).to.equal(false);
-      expect(settings.restoreState).to.equal(false);
-      if (isVenturaOrHigher) expect(settings.status).to.equal('enabled');
-    });
-
-    ifit(isWin)('adds a login item that loads in hidden mode (windows)', () => {
-      app.setLoginItemSettings({ openAtLogin: true, openAsHidden: true });
-      expect(app.getLoginItemSettings()).to.deep.equal({
-        openAtLogin: true,
-        openAsHidden: false,
-        wasOpenedAtLogin: false,
-        wasOpenedAsHidden: false,
-        restoreState: false,
-        executableWillLaunchAtLogin: true,
-        launchItems: [
-          {
-            name: 'electron.app.Electron',
-            path: process.execPath,
-            args: [],
-            scope: 'user',
-            enabled: true
           }
         ]
       });
@@ -830,21 +850,8 @@ describe('app module', () => {
       expect(app.getLoginItemSettings().openAtLogin).to.equal(false);
     });
 
-    ifit(isMac)('correctly sets and unsets the LoginItem as hidden', () => {
-      expect(app.getLoginItemSettings().openAtLogin).to.equal(false);
-      expect(app.getLoginItemSettings().openAsHidden).to.equal(false);
-
-      app.setLoginItemSettings({ openAtLogin: true, openAsHidden: true });
-      expect(app.getLoginItemSettings().openAtLogin).to.equal(true);
-      expect(app.getLoginItemSettings().openAsHidden).to.equal(!isVenturaOrHigher);
-
-      app.setLoginItemSettings({ openAtLogin: true, openAsHidden: false });
-      expect(app.getLoginItemSettings().openAtLogin).to.equal(true);
-      expect(app.getLoginItemSettings().openAsHidden).to.equal(false);
-    });
-
     ifdescribe(isMac)('using SMAppService', () => {
-      ifit(isVenturaOrHigher)('can set a login item', () => {
+      it('can set a login item', () => {
         app.setLoginItemSettings({
           openAtLogin: true,
           type: 'mainAppService'
@@ -853,15 +860,12 @@ describe('app module', () => {
         expect(app.getLoginItemSettings()).to.deep.equal({
           status: 'enabled',
           openAtLogin: true,
-          openAsHidden: false,
-          restoreState: false,
           wasOpenedAtLogin: false,
-          wasOpenedAsHidden: false,
           executableWillLaunchAtLogin: false
         });
       });
 
-      ifit(isVenturaOrHigher)('throws when setting non-default type with no name', () => {
+      it('throws when setting non-default type with no name', () => {
         expect(() => {
           app.setLoginItemSettings({
             openAtLogin: true,
@@ -870,7 +874,7 @@ describe('app module', () => {
         }).to.throw(/'name' is required when type is not mainAppService/);
       });
 
-      ifit(isVenturaOrHigher)('throws when getting non-default type with no name', () => {
+      it('throws when getting non-default type with no name', () => {
         expect(() => {
           app.getLoginItemSettings({
             type: 'daemonService'
@@ -878,7 +882,17 @@ describe('app module', () => {
         }).to.throw(/'name' is required when type is not mainAppService/);
       });
 
-      ifit(isVenturaOrHigher)('can unset a login item', () => {
+      it('does not crash when the service name is not valid UTF-8', () => {
+        expect(() => {
+          app.setLoginItemSettings({
+            openAtLogin: false,
+            type: 'daemonService',
+            serviceName: '\uD800'
+          });
+        }).to.not.throw();
+      });
+
+      it('can unset a login item', () => {
         app.setLoginItemSettings({
           openAtLogin: true,
           type: 'mainAppService'
@@ -892,10 +906,7 @@ describe('app module', () => {
         expect(app.getLoginItemSettings()).to.deep.equal({
           status: 'not-registered',
           openAtLogin: false,
-          openAsHidden: false,
-          restoreState: false,
           wasOpenedAtLogin: false,
-          wasOpenedAsHidden: false,
           executableWillLaunchAtLogin: false
         });
       });
@@ -936,10 +947,7 @@ describe('app module', () => {
       app.setLoginItemSettings({ openAtLogin: true, name: 'additionalEntry', enabled: false });
       expect(app.getLoginItemSettings()).to.deep.equal({
         openAtLogin: true,
-        openAsHidden: false,
         wasOpenedAtLogin: false,
-        wasOpenedAsHidden: false,
-        restoreState: false,
         executableWillLaunchAtLogin: true,
         launchItems: [
           {
@@ -962,10 +970,7 @@ describe('app module', () => {
       app.setLoginItemSettings({ openAtLogin: false, name: 'additionalEntry' });
       expect(app.getLoginItemSettings()).to.deep.equal({
         openAtLogin: true,
-        openAsHidden: false,
         wasOpenedAtLogin: false,
-        wasOpenedAsHidden: false,
-        restoreState: false,
         executableWillLaunchAtLogin: true,
         launchItems: [
           {
@@ -984,10 +989,7 @@ describe('app module', () => {
       app.setLoginItemSettings({ openAtLogin: true, name: 'additionalEntry', enabled: false, args: ['arg2'] });
       expect(app.getLoginItemSettings()).to.deep.equal({
         openAtLogin: false,
-        openAsHidden: false,
         wasOpenedAtLogin: false,
-        wasOpenedAsHidden: false,
-        restoreState: false,
         executableWillLaunchAtLogin: true,
         launchItems: [
           {
@@ -1011,10 +1013,7 @@ describe('app module', () => {
     ifit(isWin)('finds launch items independent of path quotation or casing', () => {
       const expectation = {
         openAtLogin: false,
-        openAsHidden: false,
         wasOpenedAtLogin: false,
-        wasOpenedAsHidden: false,
-        restoreState: false,
         executableWillLaunchAtLogin: true,
         launchItems: [
           {
@@ -1064,10 +1063,7 @@ describe('app module', () => {
       await once(appProcess, 'exit');
       expect(app.getLoginItemSettings()).to.deep.equal({
         openAtLogin: false,
-        openAsHidden: false,
         wasOpenedAtLogin: false,
-        wasOpenedAsHidden: false,
-        restoreState: false,
         executableWillLaunchAtLogin: false,
         launchItems: [
           {
@@ -1084,10 +1080,7 @@ describe('app module', () => {
     ifit(isWin)('detects enabled by TaskManager', async () => {
       const expectation = {
         openAtLogin: false,
-        openAsHidden: false,
         wasOpenedAtLogin: false,
-        wasOpenedAsHidden: false,
-        restoreState: false,
         executableWillLaunchAtLogin: true,
         launchItems: [
           {

@@ -6,7 +6,6 @@
 #define ELECTRON_SHELL_BROWSER_API_ELECTRON_API_APP_H_
 
 #include <memory>
-#include <optional>
 #include <string>
 #include <vector>
 
@@ -65,7 +64,6 @@ class App final : public gin::Wrappable<App>,
                   private content::GpuDataManagerObserver,
                   private content::BrowserChildProcessObserver {
  public:
-  static App* Create(v8::Isolate* isolate);
   static App* Get();
 
   // gin::Wrappable

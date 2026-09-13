@@ -23,29 +23,19 @@
 #include "content/browser/renderer_host/input/mouse_wheel_phase_handler.h"  // nogncheck
 #include "content/browser/renderer_host/render_widget_host_impl.h"  // nogncheck
 #include "content/browser/renderer_host/render_widget_host_view_base.h"  // nogncheck
-#include "content/browser/web_contents/web_contents_view.h"  // nogncheck
-#include "shell/browser/osr/osr_host_display_client.h"
-#include "shell/browser/osr/osr_video_consumer.h"
+#include "shell/browser/osr/osr_paint_event.h"
 #include "shell/browser/osr/osr_view_proxy.h"
 #include "third_party/abseil-cpp/absl/container/flat_hash_set.h"
 #include "third_party/blink/public/common/page/content_to_visible_time_request.h"
 #include "third_party/skia/include/core/SkBitmap.h"
 #include "ui/base/ime/text_input_client.h"
 #include "ui/compositor/compositor.h"
-#include "ui/compositor/layer_delegate.h"
-#include "ui/compositor/layer_owner.h"
-#include "ui/gfx/geometry/point.h"
 
 #include "components/viz/host/host_display_client.h"
-
-#if BUILDFLAG(IS_WIN)
-#include "ui/gfx/win/window_impl.h"
-#endif
 
 class SkBitmap;
 
 namespace gfx {
-class Point;
 class PointF;
 class Rect;
 }  // namespace gfx
@@ -56,10 +46,9 @@ class CursorManager;
 
 namespace electron {
 
-class ElectronBeginFrameTimer;
-class ElectronCopyFrameGenerator;
 class ElectronDelegatedFrameHostClient;
 class OffScreenHostDisplayClient;
+class OffScreenVideoConsumer;
 
 using OnPopupPaintCallback = base::RepeatingCallback<void(const gfx::Rect&)>;
 
@@ -173,11 +162,6 @@ class OffScreenRenderWidgetHostView
   ui::Compositor* GetCompositor() override;
   display::ScreenInfos GetNewScreenInfosForUpdate() override;
 
-  content::RenderWidgetHostViewBase* CreateViewForWidget(
-      content::RenderWidgetHost*,
-      content::RenderWidgetHost*,
-      content::WebContentsView*);
-
   const viz::LocalSurfaceId& GetLocalSurfaceId() const override;
   const viz::FrameSinkId& GetFrameSinkId() const override;
 
@@ -248,7 +232,7 @@ class OffScreenRenderWidgetHostView
     return offscreen_shared_texture_pixel_format_;
   }
 
-  ui::LayerSolidColor* root_layer() const { return root_layer_.get(); }
+  ui::LayerSurface* root_layer() const { return root_layer_.get(); }
 
   content::DelegatedFrameHost* delegated_frame_host() const {
     return delegated_frame_host_.get();
@@ -318,7 +302,7 @@ class OffScreenRenderWidgetHostView
   viz::LocalSurfaceId compositor_surface_id_;
   viz::ParentLocalSurfaceIdAllocator compositor_allocator_;
 
-  std::unique_ptr<ui::LayerSolidColor> root_layer_;
+  std::unique_ptr<ui::LayerSurface> root_layer_;
 
   // depends-on: root_layer_
   std::unique_ptr<ui::Compositor> compositor_;

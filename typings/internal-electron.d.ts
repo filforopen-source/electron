@@ -98,9 +98,10 @@ declare namespace Electron {
   interface WebContents {
     _awaitNextLoad(expectedUrl: string): Promise<void>;
     _loadURL(url: string, options: ElectronInternal.LoadURLOptions): void;
+    _setConsoleMessageObserved(observed: boolean): void;
     getOwnerBrowserWindow(): Electron.BrowserWindow | null;
     getLastWebPreferences(): Electron.WebPreferences | null;
-    _getProcessMemoryInfo(): Electron.ProcessMemoryInfo;
+    _getProcessMemoryInfo(processId?: number): Electron.ProcessMemoryInfo;
     _getPreloadScript(): Electron.PreloadScript | null;
     browserWindowOptions: BrowserWindowConstructorOptions;
     _windowOpenHandler: ((details: Electron.HandlerDetails) => any) | null;
@@ -148,6 +149,7 @@ declare namespace Electron {
     _send(internal: boolean, channel: string, args: any): void;
     _sendInternal(channel: string, ...args: any[]): void;
     _postMessage(channel: string, message: any, transfer?: any[]): void;
+    _printToPDF(options: any): Promise<Buffer>;
     _lifecycleStateForTesting: string;
   }
 
@@ -192,6 +194,7 @@ declare namespace Electron {
     commandsMap: Record<string, MenuItem>;
     groupsMap: Record<string, MenuItem[]>;
     getItemCount(): number;
+    getIndexOfCommandId(commandId: number): number;
     popupAt(
       window: BaseWindow,
       frame: WebFrameMain | undefined,
@@ -207,6 +210,7 @@ declare namespace Electron {
     setIcon(index: number, image: string | NativeImage): void;
     setRole(index: number, role: string): void;
     setCustomType(index: number, customType: string): void;
+    setBadge(index: number, badge: MenuItemBadge | null): void;
     insertItem(index: number, commandId: number, label: string): void;
     insertCheckItem(index: number, commandId: number, label: string): void;
     insertRadioItem(index: number, commandId: number, label: string, groupId: number): void;
@@ -278,7 +282,8 @@ declare namespace Electron {
         rawFeatures: string,
         referrer: Electron.Referrer,
         postData: LoadURLOptions['postData'],
-        inheritedSandboxFlags: number
+        inheritedSandboxFlags: number,
+        navigate: (webContents: Electron.WebContents) => void
       ) => void
     ): this;
     on(

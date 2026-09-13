@@ -8,13 +8,12 @@
 #include <memory>
 #include <optional>
 #include <string>
-#include <string_view>
 #include <vector>
 
 #include "base/containers/flat_map.h"
 #include "base/containers/flat_set.h"
 #include "base/memory/raw_ptr.h"
-#include "base/synchronization/lock.h"
+#include "base/memory/weak_ptr.h"
 #include "content/public/browser/content_browser_client.h"
 #include "content/public/browser/frame_tree_node_id.h"
 #include "content/public/browser/render_process_host_observer.h"
@@ -22,7 +21,6 @@
 #include "electron/buildflags/buildflags.h"
 #include "net/ssl/client_cert_identity.h"
 #include "services/metrics/public/cpp/ukm_source_id.h"
-#include "third_party/blink/public/mojom/badging/badging.mojom-forward.h"
 
 namespace base {
 class FilePath;
@@ -33,7 +31,6 @@ class ClientCertificateDelegate;
 class NavigationHandle;
 class PlatformNotificationService;
 class NavigationThrottleRegistry;
-class QuotaPermissionContext;
 }  // namespace content
 
 namespace net {
@@ -43,7 +40,6 @@ class SSLCertRequestInfo;
 namespace electron {
 
 class ElectronBluetoothDelegate;
-class ElectronBrowserMainParts;
 class ElectronHidDelegate;
 class ElectronSerialDelegate;
 class ElectronUsbDelegate;
@@ -71,6 +67,11 @@ class ElectronBrowserClient : public content::ContentBrowserClient,
   content::WebContents* GetWebContentsFromProcessID(
       content::ChildProcessId process_id);
 
+  // Whether the given renderer process was launched with the OS sandbox
+  // enabled. Returns nullopt if the launch state of the process is unknown.
+  std::optional<bool> IsRendererProcessSandboxed(
+      content::ChildProcessId process_id) const;
+
   NotificationPresenter* GetNotificationPresenter();
 
   void WebNotificationAllowed(content::RenderFrameHost* rfh,
@@ -82,12 +83,26 @@ class ElectronBrowserClient : public content::ContentBrowserClient,
 
   // content::ContentBrowserClient:
   std::string GetApplicationLocale() override;
+  bool* spare_renderer_compatible() { return &spare_renderer_compatible_; }
+
+  // Ids handed out as webRequest details.id, shared by every proxy and gate.
+  uint64_t NextWebRequestId() { return ++next_id_; }
+
   bool ShouldEnableStrictSiteIsolation() override;
+  bool ShouldUseSpareRenderProcessHost(
+      content::BrowserContext* browser_context,
+      const GURL& site_url,
+      std::optional<
+          content::ContentBrowserClient::SpareProcessRefusedByEmbedderReason>&
+          refused_reason) override;
   bool ShouldEnableSubframeZoom() override;
 #if BUILDFLAG(ENABLE_PDF_VIEWER)
   std::optional<network::CrossOriginEmbedderPolicy>
   MaybeOverrideLocalURLCrossOriginEmbedderPolicy(
       content::NavigationHandle* navigation_handle) override;
+  bool IsCrossOriginSubframeAllowedToShowFilePicker(
+      content::RenderFrameHost* render_frame_host,
+      const url::Origin& requesting_origin) override;
 #endif  // BUILDFLAG(ENABLE_PDF_VIEWER)
   bool DoesSiteRequireDedicatedProcess(content::BrowserContext* browser_context,
                                        const GURL& effective_site_url) override;
@@ -275,8 +290,8 @@ class ElectronBrowserClient : public content::ContentBrowserClient,
       bool* bypass_redirect_checks,
       bool* disable_secure_dns,
       network::mojom::URLLoaderFactoryOverridePtr* factory_override,
-      scoped_refptr<base::SequencedTaskRunner> navigation_response_task_runner)
-      override;
+      scoped_refptr<base::SequencedTaskRunner> navigation_response_task_runner,
+      bool is_for_network_service) override;
   std::vector<std::unique_ptr<content::URLLoaderRequestInterceptor>>
   WillCreateURLLoaderRequestInterceptors(
       content::NavigationUIData* navigation_ui_data,
@@ -377,11 +392,19 @@ class ElectronBrowserClient : public content::ContentBrowserClient,
 
   bool IsRendererSubFrame(content::ChildProcessId process_id) const;
 
+  // What ShouldUseSpareRenderProcessHost() answers: set around
+  // content::WebContents::Create() from the constructor options and around
+  // RegisterPendingSiteInstance() from the WebContents being given a process.
+  bool spare_renderer_compatible_ = false;
+
   // pending_render_process => web contents.
-  base::flat_map<content::ChildProcessId, content::WebContents*>
+  base::flat_map<content::ChildProcessId, base::WeakPtr<content::WebContents>>
       pending_processes_;
 
   base::flat_set<content::ChildProcessId> renderer_is_subframe_;
+
+  // Sandbox state each renderer process was launched with.
+  base::flat_map<content::ChildProcessId, bool> renderer_process_sandboxed_;
 
   std::unique_ptr<PlatformNotificationService> notification_service_;
   std::unique_ptr<NotificationPresenter> notification_presenter_;

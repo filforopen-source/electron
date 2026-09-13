@@ -43,8 +43,10 @@
 #include "third_party/blink/public/common/associated_interfaces/associated_interface_registry.h"
 #include "third_party/blink/public/common/web_preferences/web_preferences.h"
 #include "third_party/blink/public/platform/web_runtime_features.h"
-#include "third_party/blink/public/web/blink.h"
+#include "third_party/blink/public/platform/web_security_origin.h"
+#include "third_party/blink/public/platform/web_string.h"
 #include "third_party/blink/public/web/web_custom_element.h"  // NOLINT(build/include_alpha)
+#include "third_party/blink/public/web/web_frame.h"
 #include "third_party/blink/public/web/web_frame_widget.h"
 #include "third_party/blink/public/web/web_local_frame.h"
 #include "third_party/blink/public/web/web_plugin_params.h"
@@ -90,8 +92,6 @@
 #endif  // BUILDFLAG(ENABLE_PRINTING)
 
 #if BUILDFLAG(ENABLE_ELECTRON_EXTENSIONS)
-#include "base/strings/utf_string_conversions.h"
-#include "content/public/common/webplugininfo.h"
 #include "extensions/common/constants.h"
 #include "extensions/common/extensions_client.h"
 #include "extensions/renderer/api/core_extensions_renderer_api_provider.h"
@@ -132,9 +132,16 @@ bool IsDevTools(content::RenderFrame* render_frame) {
       "devtools");
 }
 
+// A DevTools extension panel or devtools_page: an extension document hosted
+// inside the DevTools front-end. A chrome-extension:// frame embedded anywhere
+// else (e.g. a web-accessible resource inside a regular page) is not one.
 bool IsDevToolsExtension(content::RenderFrame* render_frame) {
-  return render_frame->GetWebFrame()->GetDocument().Url().ProtocolIs(
-      "chrome-extension");
+  blink::WebLocalFrame* frame = render_frame->GetWebFrame();
+  if (!frame->GetDocument().Url().ProtocolIs("chrome-extension"))
+    return false;
+  blink::WebFrame* top = frame->Top();
+  return top && top != frame &&
+         top->GetSecurityOrigin().Protocol() == "devtools";
 }
 
 }  // namespace
@@ -496,15 +503,6 @@ void RendererClientBase::RunScriptsAtDocumentEnd(
 #endif
 }
 
-bool RendererClientBase::AllowScriptExtensionForServiceWorker(
-    const url::Origin& script_origin) {
-#if BUILDFLAG(ENABLE_ELECTRON_EXTENSIONS)
-  return script_origin.scheme() == extensions::kExtensionScheme;
-#else
-  return false;
-#endif
-}
-
 void RendererClientBase::DidInitializeServiceWorkerContextOnWorkerThread(
     blink::WebServiceWorkerContextProxy* context_proxy,
     const GURL& service_worker_scope,
@@ -589,11 +587,26 @@ v8::Local<v8::Context> RendererClientBase::GetContext(
     v8::Isolate* isolate) const {
   auto* render_frame = content::RenderFrame::FromWebFrame(frame);
   DCHECK(render_frame);
+  if (render_frame) {
+    v8::Local<v8::Context> env_context = GetEnvironmentContext(render_frame);
+    if (!env_context.IsEmpty())
+      return env_context;
+  }
   if (render_frame && render_frame->GetBlinkPreferences().context_isolation)
     return frame->GetScriptContextFromWorldId(isolate,
                                               WorldIDs::ISOLATED_WORLD_ID);
   else
     return frame->MainWorldScriptContext();
+}
+
+v8::Local<v8::Context> RendererClientBase::GetEnvironmentContext(
+    content::RenderFrame* render_frame) const {
+  return {};
+}
+
+std::optional<int> RendererClientBase::GetEnvironmentWorldId(
+    content::RenderFrame* render_frame) const {
+  return std::nullopt;
 }
 
 bool RendererClientBase::IsWebViewFrame(
@@ -642,7 +655,7 @@ void RendererClientBase::SetupMainWorldOverrides(
   v8::Local<v8::Value> guest_view_internal;
   if (global.GetHidden("guestViewInternal", &guest_view_internal)) {
     auto result = api::PassValueToOtherContext(
-        isolate, source_context, isolate, context, guest_view_internal,
+        isolate, source_context, context, guest_view_internal,
         source_context->Global(), false, api::BridgeErrorTarget::kSource);
     if (!result.IsEmpty()) {
       isolated_api.Set("guestViewInternal", result.ToLocalChecked());

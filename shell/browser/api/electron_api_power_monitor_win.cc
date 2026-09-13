@@ -8,14 +8,12 @@
 #include <wtsapi32.h>
 
 #include "base/debug/alias.h"
-#include "base/debug/crash_logging.h"
 #include "base/logging.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/win/windows_handle_util.h"
 #include "base/win/windows_types.h"
 #include "base/win/wrapped_window_proc.h"
 #include "components/crash/core/common/crash_key.h"
-#include "content/public/browser/browser_task_traits.h"
 #include "content/public/browser/browser_thread.h"
 #include "ui/gfx/win/hwnd_util.h"
 
@@ -52,8 +50,8 @@ void PowerMonitor::InitPlatformSpecificMonitors() {
 
   // Create an offscreen window for receiving broadcast messages for the
   // session lock and unlock events.
-  window_ = CreateWindow(MAKEINTATOM(atom_), 0, 0, 0, 0, 0, 0, HWND_MESSAGE, 0,
-                         instance_, 0);
+  window_ = CreateWindow(MAKEINTATOM(atom_), nullptr, 0, 0, 0, 0, 0,
+                         HWND_MESSAGE, nullptr, instance_, nullptr);
   gfx::CheckWindowCreated(window_, ::GetLastError());
   gfx::SetWindowUserData(window_, this);
 

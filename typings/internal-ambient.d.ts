@@ -27,6 +27,7 @@ declare namespace NodeJS {
     isPromptAPIEnabled(): boolean;
     isExtensionsEnabled(): boolean;
     isComponentBuild(): boolean;
+    isRunAsNodeEnabled(): boolean;
   }
 
   interface IpcRendererImpl {
@@ -48,6 +49,7 @@ declare namespace NodeJS {
     requestGarbageCollectionForTesting(): void;
     runUntilIdle(): void;
     triggerFatalErrorForTesting(): void;
+    exitImmediately(code: number): never;
   }
 
   type CrashReporterBinding = Omit<Electron.CrashReporter, 'start'> & {
@@ -73,9 +75,12 @@ declare namespace NodeJS {
     size: number;
     unpacked: boolean;
     offset: number;
+    executable: boolean;
     integrity?: {
       algorithm: 'SHA256';
       hash: string;
+      blockSize: number;
+      blocks: string[];
     };
   };
 
@@ -83,6 +88,7 @@ declare namespace NodeJS {
     size: number;
     offset: number;
     type: number;
+    executable: boolean;
   };
 
   interface AsarArchive {
@@ -96,6 +102,7 @@ declare namespace NodeJS {
 
   interface AsarBinding {
     Archive: { new (path: string): AsarArchive };
+    createSentinelFd(): number | -1;
     splitPath(path: string):
       | {
           isAsar: false;
@@ -255,6 +262,7 @@ declare namespace NodeJS {
 
   interface URLLoader extends EventEmitter {
     cancel(): void;
+    hold(): void;
     on(eventName: 'data', listener: (event: any, data: ArrayBuffer, resume: () => void) => void): this;
     on(
       eventName: 'response-started',
@@ -279,11 +287,13 @@ declare namespace NodeJS {
   }
 
   interface Process {
-    internalBinding?(name: string): any;
     _linkedBinding(name: string): any;
     _linkedBinding(name: 'electron_common_asar'): AsarBinding;
-    _linkedBinding(name: 'electron_common_clipboard'): Electron.Clipboard;
     _linkedBinding(name: 'electron_common_command_line'): Electron.CommandLine;
+    _linkedBinding(name: 'electron_common_crashpad_support'): {
+      getCrashdumpSignalFD(): number;
+      getCrashpadHandlerPID(): number;
+    };
     _linkedBinding(name: 'electron_common_environment'): EnvironmentBinding;
     _linkedBinding(name: 'electron_common_features'): FeaturesBinding;
     _linkedBinding(name: 'electron_common_native_image'): { nativeImage: typeof Electron.NativeImage };
@@ -293,6 +303,8 @@ declare namespace NodeJS {
     _linkedBinding(name: 'electron_common_v8_util'): V8UtilBinding;
     _linkedBinding(name: 'electron_browser_app'): { app: Electron.App; App: Function };
     _linkedBinding(name: 'electron_browser_auto_updater'): { autoUpdater: Electron.AutoUpdater };
+    _linkedBinding(name: 'electron_browser_clipboard'): Electron.Clipboard;
+    _linkedBinding(name: 'electron_browser_clipboard_item'): Electron.ClipboardItem;
     _linkedBinding(name: 'electron_browser_crash_reporter'): CrashReporterBinding;
     _linkedBinding(name: 'electron_browser_desktop_capturer'): {
       createDesktopCapturer(): ElectronInternal.DesktopCapturer;

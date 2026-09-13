@@ -173,6 +173,13 @@ Menu.prototype.insert = function (pos, item) {
   // insert item depending on its type
   insertItemByType.call(this, item, pos);
 
+  // Make menu accessible to items.
+  item.overrideReadOnlyProperty('menu', this);
+
+  // Remember the item before the setters below, which can throw.
+  this.items.splice(pos, 0, item);
+  this.commandsMap[item.commandId] = item;
+
   // set item properties
   if (item.toolTip) this.setToolTip(pos, item.toolTip);
   if (item.icon) this.setIcon(pos, item.icon);
@@ -180,13 +187,9 @@ Menu.prototype.insert = function (pos, item) {
   if (item.type === 'palette' || item.type === 'header') {
     this.setCustomType(pos, item.type);
   }
-
-  // Make menu accessible to items.
-  item.overrideReadOnlyProperty('menu', this);
-
-  // Remember the items.
-  this.items.splice(pos, 0, item);
-  this.commandsMap[item.commandId] = item;
+  if (process.platform === 'darwin' && item.badge) {
+    this.setBadge(pos, item.badge);
+  }
 };
 
 Menu.prototype._callMenuWillShow = function () {

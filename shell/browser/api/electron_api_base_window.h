@@ -12,12 +12,17 @@
 #include <string_view>
 #include <vector>
 
-#include "content/public/browser/browser_task_traits.h"
 #include "content/public/browser/browser_thread.h"
 #include "shell/browser/native_window_observer.h"
 #include "shell/common/api/electron_api_native_image.h"
 #include "shell/common/gin_helper/trackable_object.h"
 #include "v8/include/cppgc/persistent.h"
+
+#if BUILDFLAG(IS_MAC)
+#include <optional>
+
+#include "ui/gfx/geometry/point.h"
+#endif
 
 namespace gin {
 class Arguments;
@@ -165,6 +170,8 @@ class BaseWindow : public gin_helper::TrackableObject<BaseWindow>,
   void SetPosition(int x, int y, gin::Arguments* args);
   std::array<int, 2U> GetPosition() const;
   void SetTitle(const std::string& title);
+  void SetTitleFromPage(const std::string& title);
+  bool SetTitleFromPageIfNotSetFromApi(const std::string& title);
   std::string GetTitle() const;
   void SetAccessibleTitle(const std::string& title);
   std::string GetAccessibleTitle() const;
@@ -301,6 +308,8 @@ class BaseWindow : public gin_helper::TrackableObject<BaseWindow>,
 
   // Reference to JS wrapper to prevent garbage collection.
   v8::Global<v8::Value> self_ref_;
+
+  bool title_set_from_api_ = false;
 
   base::WeakPtrFactory<BaseWindow> weak_factory_{this};
 };

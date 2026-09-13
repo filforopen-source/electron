@@ -269,6 +269,51 @@ describe('webContents.setWindowOpenHandler', () => {
       expect(size).to.equal('30px');
     });
 
+    it('creates a sandboxed child in its own process from an unsandboxed opener by default', async () => {
+      const parent = new BrowserWindow({
+        show: false,
+        webPreferences: { nodeIntegration: true, contextIsolation: false }
+      });
+      await parent.loadURL('about:blank');
+      parent.webContents.setWindowOpenHandler(() => ({
+        action: 'allow',
+        overrideBrowserWindowOptions: { show: false }
+      }));
+
+      const didCreateWindow = once(parent.webContents, 'did-create-window') as Promise<
+        [BrowserWindow, Electron.DidCreateWindowDetails]
+      >;
+      const openedNull = await parent.webContents.executeJavaScript("window.open('about:blank') === null");
+      const [child] = await didCreateWindow;
+      if (child.webContents.isLoading()) await once(child.webContents, 'did-finish-load');
+
+      expect(openedNull).to.equal(true);
+      expect(child.webContents.getLastWebPreferences()?.sandbox).to.equal(true);
+      expect(child.webContents.getOSProcessId()).to.not.equal(parent.webContents.getOSProcessId());
+      expect(await child.webContents.executeJavaScript('window.opener === null')).to.equal(true);
+    });
+
+    it('keeps the child in the opener process when the override sandbox state matches the opener', async () => {
+      const parent = new BrowserWindow({
+        show: false,
+        webPreferences: { nodeIntegration: true, contextIsolation: false }
+      });
+      await parent.loadURL('about:blank');
+      parent.webContents.setWindowOpenHandler(() => ({
+        action: 'allow',
+        overrideBrowserWindowOptions: { show: false, webPreferences: { sandbox: false } }
+      }));
+
+      const didCreateWindow = once(parent.webContents, 'did-create-window') as Promise<
+        [BrowserWindow, Electron.DidCreateWindowDetails]
+      >;
+      const openedNull = await parent.webContents.executeJavaScript("window.open('about:blank') === null");
+      const [child] = await didCreateWindow;
+
+      expect(openedNull).to.equal(false);
+      expect(child.webContents.getOSProcessId()).to.equal(parent.webContents.getOSProcessId());
+    });
+
     it('does not hang parent window when denying window.open', async () => {
       browserWindow.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
       browserWindow.webContents.executeJavaScript("window.open('https://127.0.0.1')");
@@ -379,9 +424,9 @@ describe('webContents.setWindowOpenHandler', () => {
       await childWindow.webContents.executeJavaScript(
         "const meta = document.createElement('meta'); meta.name = 'color-scheme'; meta.content = 'dark'; document.head.appendChild(meta); true;"
       );
-      const screenCapture = new ScreenCapture(display);
+      const capture = ScreenCapture.forWindow(childWindow);
       // color-scheme is set to dark so background should not be white
-      await screenCapture.expectColorAtCenterDoesNotMatch(HexColors.WHITE);
+      await capture.expectColorAtCenterDoesNotMatch(HexColors.WHITE);
     });
   });
 

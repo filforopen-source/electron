@@ -12,7 +12,7 @@ invisible state of the `viz::DisplayScheduler` owned
 by the `ui::Compositor`.
 
 diff --git a/ui/compositor/compositor.cc b/ui/compositor/compositor.cc
-index a1ee39845dc3abe2bedfbe6272e6aa3c65559458..d55ba712619790cac7525ba3993da6aa7b617674 100644
+index 791dd08a8d911e3c8a226804e9645c4ef1554ca0..201f914eaa68ba96f01fd39a2f72bf3442cb7a8d 100644
 --- a/ui/compositor/compositor.cc
 +++ b/ui/compositor/compositor.cc
 @@ -368,7 +368,8 @@ void Compositor::SetLayerTreeFrameSink(
@@ -25,7 +25,7 @@ index a1ee39845dc3abe2bedfbe6272e6aa3c65559458..d55ba712619790cac7525ba3993da6aa
      display_private_->SetDisplayColorSpaces(display_color_spaces_);
      display_private_->SetDisplayColorMatrix(
          gfx::SkM44ToTransform(display_color_matrix_));
-@@ -602,7 +603,9 @@ void Compositor::SetVisible(bool visible) {
+@@ -608,7 +609,9 @@ void Compositor::SetVisible(bool visible) {
    // updated then. We need to call this even if the visibility hasn't changed,
    // for the same reason.
    if (display_private_)
@@ -36,7 +36,7 @@ index a1ee39845dc3abe2bedfbe6272e6aa3c65559458..d55ba712619790cac7525ba3993da6aa
  
    if (changed) {
      observer_list_.Notify(&CompositorObserver::OnCompositorVisibilityChanged,
-@@ -1069,6 +1072,15 @@ void Compositor::MaybeUpdateObserveBeginFrame() {
+@@ -1076,6 +1079,15 @@ void Compositor::MaybeUpdateObserveBeginFrame() {
        host_begin_frame_observer_->GetBoundRemote());
  }
  
@@ -53,10 +53,10 @@ index a1ee39845dc3abe2bedfbe6272e6aa3c65559458..d55ba712619790cac7525ba3993da6aa
  void Compositor::SetSeamlessRefreshRates(
      const std::vector<float>& seamless_refresh_rates) {
 diff --git a/ui/compositor/compositor.h b/ui/compositor/compositor.h
-index aac30397eb4750e2a009b887073be6cc923f3424..f910be63ddde39cc59542fefae8a70589acb78b0 100644
+index 12b9261ca465d7f7293a4941cfde9719f6d97135..8d2e633bba4231cfdfa4cfe198ce6f58411b8d03 100644
 --- a/ui/compositor/compositor.h
 +++ b/ui/compositor/compositor.h
-@@ -503,6 +503,10 @@ class COMPOSITOR_EXPORT Compositor
+@@ -505,6 +505,10 @@ class COMPOSITOR_EXPORT Compositor
  
    const cc::LayerTreeSettings& GetLayerTreeSettings() const;
  

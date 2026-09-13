@@ -39,10 +39,10 @@ Three classes of fixes, all of which give the affected symbols strong
 Observed on macOS arm64 official builds; latent on Linux/Windows.
 
 diff --git a/src/env.cc b/src/env.cc
-index 79a309661aff7ebb18f96e64d0d2b860ab80dc57..10266fd1233d9b117eefbbbb4f455289b002785a 100644
+index 5389d6e699f32dacfd4d5710258f04f1cb9f9d12..c665e08b6d4eb3f1f772451e6bed1ae746f0d2f3 100644
 --- a/src/env.cc
 +++ b/src/env.cc
-@@ -2266,4 +2266,8 @@ v8::CpuProfile* Environment::StopCpuProfile(v8::ProfilerId profile_id) {
+@@ -2328,4 +2328,8 @@ v8::CpuProfile* Environment::StopCpuProfile(v8::ProfilerId profile_id) {
    return profile;
  }
  
@@ -52,7 +52,7 @@ index 79a309661aff7ebb18f96e64d0d2b860ab80dc57..10266fd1233d9b117eefbbbb4f455289
 +
  }  // namespace node
 diff --git a/src/heap_utils.cc b/src/heap_utils.cc
-index e52685546a7ac2b6e56edb0ba28408cb1737c336..440adb078b03bdc503cc11a9224c95ecdcfadf01 100644
+index 72c1a73aa6c06f55f655cabd0416a709c31e2722..bb7519e4b984ef9915f72bdfb08414f0763490c6 100644
 --- a/src/heap_utils.cc
 +++ b/src/heap_utils.cc
 @@ -48,7 +48,7 @@ namespace heap {
@@ -64,7 +64,7 @@ index e52685546a7ac2b6e56edb0ba28408cb1737c336..440adb078b03bdc503cc11a9224c95ec
    size_t SizeInBytes() override { return 0; }
    bool IsEmbedderNode() override { return false; }
    Local<Data> V8Value() { return PersistentToLocal::Strong(persistent_); }
-@@ -75,6 +75,8 @@ class JSGraphJSNode : public EmbedderGraph::Node {
+@@ -69,6 +69,8 @@ class JSGraphJSNode : public EmbedderGraph::Node {
    Global<Data> persistent_;
  };
  
@@ -87,7 +87,7 @@ index d2375ecd32483ff57840d30f804100372f2e12db..396f7848952e941b3e667b47424c5166
  #endif
  
 diff --git a/src/memory_tracker-inl.h b/src/memory_tracker-inl.h
-index 56f4a180633d39c652449dd3d457d29e4a9f6ac1..765a868da8f5e4e6848e6ed57c46e4acf2c709ec 100644
+index a59452fd994c33c263da9ff0865ef6717d4a81b4..be72ac5f3102b2915eff3fcbcfb51b8af7eafd32 100644
 --- a/src/memory_tracker-inl.h
 +++ b/src/memory_tracker-inl.h
 @@ -63,7 +63,7 @@ class MemoryRetainerNode : public v8::EmbedderGraph::Node {
@@ -100,10 +100,10 @@ index 56f4a180633d39c652449dd3d457d29e4a9f6ac1..765a868da8f5e4e6848e6ed57c46e4ac
    size_t SizeInBytes() override { return size_; }
    // TODO(addaleax): Merging this with the "official" WrapperNode() method
 diff --git a/src/node_builtins.cc b/src/node_builtins.cc
-index 71226c74e5aa3d01603cce5852465a6fe011a9f7..230ae0b42a629e48879c2392954e5183216ad495 100644
+index f4094b05b0122377c826828457a842cde0acb2e8..a6a0ffb0ed272b9b05acc9cb32aa7951a780443e 100644
 --- a/src/node_builtins.cc
 +++ b/src/node_builtins.cc
-@@ -993,6 +993,21 @@ void BuiltinLoader::RegisterExternalReferences(
+@@ -1017,6 +1017,21 @@ void BuiltinLoader::RegisterExternalReferences(
  }
  
  }  // namespace builtins
@@ -126,10 +126,10 @@ index 71226c74e5aa3d01603cce5852465a6fe011a9f7..230ae0b42a629e48879c2392954e5183
  
  NODE_BINDING_PER_ISOLATE_INIT(
 diff --git a/src/node_http2.cc b/src/node_http2.cc
-index 55bca557a81e4de72286ed42d0df63acf610ab64..ee99a87efab1cab915694b5b0c7bb1ca3ce24c7d 100644
+index b6bbb1a4edc33da3b77806c095213e0d663ad1a6..426d25d13c28d0282d217a54d66549324ff875ed 100644
 --- a/src/node_http2.cc
 +++ b/src/node_http2.cc
-@@ -3656,6 +3656,13 @@ void Http2Session::MaybeNotifyGracefulCloseComplete() {
+@@ -3795,6 +3795,13 @@ void Http2Session::MaybeNotifyGracefulCloseComplete() {
    return;
  }
  }  // namespace http2
@@ -144,10 +144,10 @@ index 55bca557a81e4de72286ed42d0df63acf610ab64..ee99a87efab1cab915694b5b0c7bb1ca
  
  NODE_BINDING_CONTEXT_AWARE_INTERNAL(http2, node::http2::Initialize)
 diff --git a/src/node_http2.h b/src/node_http2.h
-index 28245d7b98e06bee467c5f91dd9caf1cfdbfdda0..a4575619b26346d05ba9a1a4a245937a3b30b414 100644
+index f321bf0c16018fa134202784a8e1c30e017d2de8..df19438171dbf2164e735d576036b8ea462065be 100644
 --- a/src/node_http2.h
 +++ b/src/node_http2.h
-@@ -144,6 +144,96 @@ struct Http2RcBufferPointerTraits {
+@@ -146,6 +146,96 @@ struct Http2RcBufferPointerTraits {
  using Http2Headers = NgHeaders<Http2HeadersTraits>;
  using Http2RcBufferPointer = NgRcBufPointer<Http2RcBufferPointerTraits>;
  

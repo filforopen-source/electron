@@ -12,6 +12,7 @@
 
 #include "base/containers/span.h"
 #include "base/functional/callback.h"
+#include "base/functional/callback_helpers.h"
 #include "base/memory/memory_pressure_listener_registry.h"
 #include "base/no_destructor.h"
 #include "base/strings/strcat.h"
@@ -20,15 +21,13 @@
 #include "content/public/renderer/render_frame.h"
 #include "content/public/renderer/render_frame_observer.h"
 #include "content/public/renderer/render_frame_visitor.h"
+#include "electron/buildflags/buildflags.h"
 #include "gin/arguments.h"
 #include "gin/object_template_builder.h"
 #include "gin/wrappable.h"
 #include "services/service_manager/public/cpp/interface_provider.h"
-#include "shell/common/api/api.mojom.h"
 #include "shell/common/gin_converters/blink_converter.h"
 #include "shell/common/gin_converters/callback_converter.h"
-#include "shell/common/gin_converters/file_path_converter.h"
-#include "shell/common/gin_converters/value_converter.h"
 #include "shell/common/gin_helper/constructible.h"
 #include "shell/common/gin_helper/dictionary.h"
 #include "shell/common/gin_helper/error_thrower.h"
@@ -37,10 +36,8 @@
 #include "shell/common/gin_helper/promise.h"
 #include "shell/common/gin_helper/wrappable_pointer_tags.h"
 #include "shell/common/node_includes.h"
-#include "shell/common/node_util.h"
 #include "shell/common/options_switches.h"
 #include "shell/common/web_contents_utility.mojom.h"
-#include "shell/renderer/api/context_bridge/object_cache.h"
 #include "shell/renderer/api/electron_api_context_bridge.h"
 #include "shell/renderer/api/electron_api_spell_check_client.h"
 #include "shell/renderer/electron_render_frame_observer.h"
@@ -174,8 +171,8 @@ class ScriptExecutionCallback {
       v8::Local<v8::Context> source_context =
           result->GetCreationContextChecked(isolate);
       maybe_result = PassValueToOtherContext(
-          isolate, source_context, promise_.isolate(), promise_.GetContext(),
-          result, source_context->Global(), false, BridgeErrorTarget::kSource);
+          isolate, source_context, promise_.GetContext(), result,
+          source_context->Global(), false, BridgeErrorTarget::kSource);
       if (maybe_result.IsEmpty() || try_catch.HasCaught()) {
         success = false;
       }
@@ -572,10 +569,14 @@ class WebFrameRenderer final
                              v8::Local<v8::Object> provider) {
     auto context = isolate->GetCurrentContext();
     if (!provider->Has(context, gin::StringToV8(isolate, "spellCheck"))
-             .ToChecked()) {
+             .FromMaybe(false)) {
       thrower.ThrowError("\"spellCheck\" has to be defined");
       return;
     }
+
+    // Reading |provider| may run script that detaches the frame; do it first.
+    auto spell_check_client =
+        std::make_unique<SpellCheckClient>(language, isolate, provider);
 
     // Remove the old client.
     content::RenderFrame* render_frame;
@@ -588,8 +589,6 @@ class WebFrameRenderer final
 
     // Set spellchecker for all live frames in the same process or
     // in the sandbox mode for all live sub frames to this WebFrame.
-    auto spell_check_client =
-        std::make_unique<SpellCheckClient>(language, isolate, provider);
     FrameSetSpellChecker spell_checker(spell_check_client.get(), render_frame);
 
     // Attach the spell checker to RenderFrame.
@@ -697,7 +696,8 @@ class WebFrameRenderer final
                        base::Unretained(self)),
         blink::BackForwardCacheAware::kAllow,
         blink::mojom::WantResultOption::kWantResult,
-        blink::mojom::PromiseResultOption::kDoNotWait);
+        blink::mojom::PromiseResultOption::kDoNotWait,
+        /*is_injected_extension_script=*/false);
 
     return handle;
   }
@@ -706,19 +706,20 @@ class WebFrameRenderer final
   //   worldId, scripts[, userGesture][, callback])
   v8::Local<v8::Promise> ExecuteJavaScriptInIsolatedWorld(
       gin::Arguments* const args,
-      const int world_id,
+      v8::Local<v8::Value> world_id_value,
       const std::vector<gin_helper::Dictionary>& scripts) {
     v8::Isolate* const isolate = args->isolate();
     gin_helper::Promise<v8::Local<v8::Value>> promise{isolate};
     v8::Local<v8::Promise> handle = promise.GetHandle();
 
-    content::RenderFrame* render_frame;
-    std::string error_msg;
-    if (!MaybeGetRenderFrame(&error_msg, "executeJavaScriptInIsolatedWorld",
-                             &render_frame)) {
-      promise.RejectWithErrorMessage(error_msg);
+    // Take the raw value: gin's int converter never entered this method, so a
+    // non-integer worldId resolved undefined instead of rejecting.
+    if (!world_id_value->IsInt32()) {
+      promise.Reject(v8::Exception::TypeError(v8::String::NewFromUtf8Literal(
+          isolate, "worldId must be an integer")));
       return handle;
     }
+    const int world_id = world_id_value.As<v8::Int32>()->Value();
 
     bool has_user_gesture = false;
     if (auto next = args->PeekNext(); !next.IsEmpty() && next->IsBoolean()) {
@@ -754,6 +755,15 @@ class WebFrameRenderer final
                            blink::WebURL(GURL(url)));
     }
 
+    // Only now: the |scripts| getters above may have detached the frame.
+    content::RenderFrame* render_frame;
+    std::string error_msg;
+    if (!MaybeGetRenderFrame(&error_msg, "executeJavaScriptInIsolatedWorld",
+                             &render_frame)) {
+      promise.RejectWithErrorMessage(error_msg);
+      return handle;
+    }
+
     // Deletes itself.
     auto* self = new ScriptExecutionCallback(std::move(promise),
                                              std::move(completion_callback));
@@ -769,7 +779,8 @@ class WebFrameRenderer final
                        base::Unretained(self)),
         blink::BackForwardCacheAware::kPossiblyDisallow,
         blink::mojom::WantResultOption::kWantResult,
-        blink::mojom::PromiseResultOption::kDoNotWait);
+        blink::mojom::PromiseResultOption::kDoNotWait,
+        /*is_injected_extension_script=*/false);
 
     return handle;
   }

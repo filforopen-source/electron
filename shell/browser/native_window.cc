@@ -5,11 +5,11 @@
 #include "shell/browser/native_window.h"
 
 #include <algorithm>
+#include <cmath>
 #include <string>
 #include <vector>
 
 #include "base/memory/ptr_util.h"
-#include "base/memory/raw_ptr.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/values.h"
 #include "components/prefs/pref_service.h"
@@ -21,7 +21,7 @@
 #include "shell/browser/browser_process_impl.h"
 #include "shell/browser/draggable_region_provider.h"
 #include "shell/browser/electron_browser_main_parts.h"
-#include "shell/browser/ui/drag_util.h"
+#include "shell/browser/ui/inspectable_web_contents_view.h"
 #include "shell/browser/window_list.h"
 #include "shell/common/color_util.h"
 #include "shell/common/electron_constants.h"
@@ -36,8 +36,13 @@
 #include "ui/views/widget/widget.h"
 
 #if !BUILDFLAG(IS_MAC)
-#include "shell/browser/ui/views/frameless_view.h"
 #include "ui/views/view_utils.h"
+#endif
+
+#if BUILDFLAG(IS_WIN)
+#include "shell/browser/ui/views/frameless_view.h"
+#elif BUILDFLAG(IS_LINUX)
+#include "shell/browser/ui/views/electron_frame_view_linux.h"
 #endif
 
 #if defined(USE_OZONE)
@@ -96,9 +101,10 @@ NativeWindow::NativeWindow(const int32_t base_window_id,
       is_modal_{parent != nullptr &&
                 options.ValueOrDefault(options::kModal, false)},
       has_frame_{options.ValueOrDefault(options::kFrame, true) &&
-                 title_bar_style_ == TitleBarStyle::kNormal},
-      parent_{parent} {
+                 title_bar_style_ == TitleBarStyle::kNormal} {
   DCHECK_NE(base_window_id_, 0);
+  if (parent)
+    parent_ = parent->GetWeakPtr();
 
 #if BUILDFLAG(IS_WIN)
   options.Get(options::kBackgroundMaterial, &background_material_);
@@ -147,6 +153,18 @@ NativeWindow::NativeWindow(const int32_t base_window_id,
   }
 
   WindowList::AddWindow(this);
+}
+
+InspectableWebContentsView* NativeWindow::primary_web_contents_view() {
+  return static_cast<InspectableWebContentsView*>(
+      primary_web_contents_view_.view());
+}
+
+void NativeWindow::InitPrimaryWebContentsView(
+    InspectableWebContentsView* view) {
+  CHECK(view);
+  CHECK(!primary_web_contents_view_);
+  primary_web_contents_view_.SetView(view);
 }
 
 NativeWindow::~NativeWindow() {
@@ -294,6 +312,10 @@ NativeWindow* NativeWindow::FromWidget(const views::Widget* widget) {
   DCHECK(widget);
   return static_cast<NativeWindow*>(
       widget->GetNativeWindowProperty(kNativeWindowKey.c_str()));
+}
+
+double NativeWindow::ClampOpacity(double opacity) {
+  return std::isnan(opacity) ? 1.0 : std::clamp(opacity, 0.0, 1.0);
 }
 
 void NativeWindow::SetShape(const std::vector<gfx::Rect>& rects) {
@@ -468,7 +490,10 @@ bool NativeWindow::IsFocusable() const {
 }
 
 void NativeWindow::SetParentWindow(NativeWindow* parent) {
-  parent_ = parent;
+  if (parent)
+    parent_ = parent->GetWeakPtr();
+  else
+    parent_.reset();
 }
 
 bool NativeWindow::AddTabbedWindow(NativeWindow* window) {
@@ -726,9 +751,16 @@ int NativeWindow::NonClientHitTest(const gfx::Point& point) {
 #if !BUILDFLAG(IS_MAC)
   // We need to ensure we account for resizing borders on Windows and Linux.
   if ((!has_frame() || has_client_frame()) && IsResizable()) {
-    auto* frame = views::AsViewClass<FramelessView>(
-        widget()->non_client_view()->frame_view());
-    if (frame) {
+    // TODO(mitchchn): bring back a cross-platform interface for
+    // frame operations. (Both Windows and Linux used to inherit
+    // from FramelessView.)
+#if BUILDFLAG(IS_WIN)
+    using ResizableFrameView = FramelessView;
+#else
+    using ResizableFrameView = ElectronFrameViewLinux;
+#endif
+    auto* frame_view = widget()->non_client_view()->frame_view();
+    if (auto* frame = views::AsViewClass<ResizableFrameView>(frame_view)) {
       int border_hit = frame->ResizingBorderHitTest(point);
       if (border_hit != HTNOWHERE)
         return border_hit;
@@ -861,6 +893,12 @@ void NativeWindow::DebouncedSaveWindowState() {
   save_window_state_timer_.Start(
       FROM_HERE, base::Milliseconds(200),
       base::BindOnce(&NativeWindow::SaveWindowState, base::Unretained(this)));
+}
+
+void NativeWindow::FlushPendingWindowStateSaveForTesting() {
+  if (save_window_state_timer_.IsRunning()) {
+    save_window_state_timer_.FireNow();
+  }
 }
 
 void NativeWindow::SaveWindowState() {

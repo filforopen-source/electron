@@ -9,7 +9,6 @@
 #include <utility>
 
 #include "base/memory/raw_ptr.h"
-#include "base/strings/utf_string_conversions.h"
 #include "content/public/browser/web_contents.h"
 #include "shell/browser/ui/devtools_context_menu.h"
 #include "shell/browser/ui/drag_util.h"
@@ -96,17 +95,6 @@ InspectableWebContentsView::InspectableWebContentsView(
   if (!inspectable_web_contents_->is_guest() &&
       inspectable_web_contents_->GetWebContents()->GetNativeView()) {
     auto* contents_web_view = new views::WebView(nullptr);
-#if defined(USE_AURA)
-    // Chromium's NativeViewHostAura defaults to managing the hosted native
-    // view's layer via views crrev.com/c/8013273. Under that
-    // path the web contents' aura window layer is reparented out of its aura
-    // parent window's layer, which breaks occlusion-based visibility tracking
-    // (document.visibilityState) for WebContentsViews nested inside another
-    // View. Opt back into the legacy parent-managed layer path so occlusion is
-    // computed correctly. This must run before the WebView is attached to a
-    // Widget.
-    contents_web_view->holder()->SetLayerManagedByViews(false);
-#endif
     contents_web_view->SetWebContents(
         inspectable_web_contents_->GetWebContents());
     contents_web_view_ = contents_web_view;
@@ -297,9 +285,29 @@ void InspectableWebContentsView::ShowDevToolsContextMenu(
   context_menu_->RunMenuAt(widget);
 }
 
+void InspectableWebContentsView::SetContentsViewBounds(
+    const gfx::Rect& bounds) {
+  GetContentsView()->SetBoundsRect(bounds);
+
+  // If the view isn't currently in a Widget, we need to propagate the new
+  // bounds to the WebContents manually or the page won't see the correct
+  // dimensions.
+  if (!GetWidget() && contents_web_view_) {
+    if (auto* web_contents = inspectable_web_contents_->GetWebContents()) {
+      web_contents->Resize(gfx::Rect(bounds.size()));
+    }
+  }
+}
+
+void InspectableWebContentsView::OnBoundsChanged(
+    const gfx::Rect& previous_bounds) {
+  if (bounds_changed_callback_)
+    bounds_changed_callback_.Run();
+}
+
 void InspectableWebContentsView::Layout(PassKey) {
   if (!devtools_web_view_->GetVisible()) {
-    GetContentsView()->SetBoundsRect(GetContentsBounds());
+    SetContentsViewBounds(GetContentsBounds());
     // Propagate layout call to all children, for example browser views.
     LayoutSuperclass<View>(this);
     return;
@@ -317,7 +325,7 @@ void InspectableWebContentsView::Layout(PassKey) {
   new_contents_bounds.set_x(GetMirroredXForRect(new_contents_bounds));
 
   devtools_web_view_->SetBoundsRect(new_devtools_bounds);
-  GetContentsView()->SetBoundsRect(new_contents_bounds);
+  SetContentsViewBounds(new_contents_bounds);
 
   // Propagate layout call to all children, for example browser views.
   LayoutSuperclass<View>(this);

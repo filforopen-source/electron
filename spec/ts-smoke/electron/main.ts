@@ -1,10 +1,12 @@
 /* eslint-disable */
 
-import { clipboard, crashReporter, nativeImage, shell } from 'electron/common';
+import { crashReporter, nativeImage, shell } from 'electron/common';
 import {
   app,
   autoUpdater,
   BrowserWindow,
+  ClipboardItem,
+  clipboard,
   contentTracing,
   dialog,
   desktopCapturer,
@@ -321,7 +323,7 @@ app.setJumpList([
 if (app.isAccessibilitySupportEnabled()) {
   console.log('a11y running');
 }
-app.setLoginItemSettings({ openAtLogin: true, openAsHidden: false });
+app.setLoginItemSettings({ openAtLogin: true });
 console.log(app.getLoginItemSettings().wasOpenedAtLogin);
 app.setAboutPanelOptions({
   applicationName: 'Test',
@@ -627,6 +629,30 @@ menuItem.label = 'Hello World!';
 menuItem.click = (passedMenuItem: Electron.MenuItem, browserWindow: Electron.BrowserWindow) => {
   console.log('click', passedMenuItem, browserWindow);
 };
+
+const badgedItem = new MenuItem({
+  label: 'Alerts',
+  badge: { type: 'alerts', count: 3 }
+});
+console.log(badgedItem.badge);
+
+const customBadgeItem = new MenuItem({
+  label: 'Custom',
+  badge: { type: 'none', content: 'New' }
+});
+customBadgeItem.badge = { type: 'updates', count: 5 };
+
+const updatesItem = new MenuItem({
+  label: 'Updates',
+  badge: { type: 'updates', count: 10 }
+});
+console.log(updatesItem.badge);
+
+const newItemsBadge = new MenuItem({
+  label: 'New Items',
+  badge: { type: 'new-items', count: 1 }
+});
+console.log(newItemsBadge.badge);
 
 // menu
 // https://github.com/electron/electron/blob/main/docs/api/menu.md
@@ -1035,22 +1061,33 @@ app.whenReady().then(() => {
 // clipboard
 // https://github.com/electron/electron/blob/main/docs/api/clipboard.md
 
-clipboard.writeText('Example String');
-clipboard.writeText('Example String', 'selection');
-clipboard.writeBookmark('foo', 'http://example.com');
-clipboard.writeBookmark('foo', 'http://example.com', 'selection');
-clipboard.writeFindText('foo');
-console.log(clipboard.readText('selection'));
-console.log(clipboard.readFindText());
-console.log(clipboard.availableFormats());
-console.log(clipboard.readBookmark().title);
-clipboard.clear();
+(async () => {
+  await clipboard.writeText('Example String');
+  const text: string = await clipboard.readText();
+  console.log(text);
+  clipboard.clear();
 
-clipboard.write({
-  html: '<html></html>',
-  text: 'Hello World!',
-  image: clipboard.readImage()
-});
+  // clipboard.write takes an array of `ClipboardItem` instances. Each is
+  // constructed with a MIME-keyed record whose values are a Blob or a
+  // string (or a { title, url } object for the bookmark MIME type).
+  await clipboard.write([
+    new ClipboardItem({
+      'text/plain': 'Hello World!',
+      'text/html': '<html></html>',
+      'image/png': new Blob([Buffer.from('89504e470d0a1a0a', 'hex')], { type: 'image/png' }),
+      'electron application/bookmark': { title: 'Electron', url: 'https://electronjs.org' }
+    })
+  ]);
+  const items = await clipboard.read();
+  for (const item of items) {
+    for (const type of item.types) {
+      // `getType` resolves to a Blob for every MIME type except
+      // `electron application/bookmark`, which resolves to a `{ title, url }`.
+      const payload = await item.getType(type);
+      console.log(type, 'url' in payload ? payload.url : payload.size);
+    }
+  }
+})();
 
 // crash-reporter
 // https://github.com/electron/electron/blob/main/docs/api/crash-reporter.md
@@ -1077,7 +1114,7 @@ appIcon2.destroy();
 const window2 = new BrowserWindow({ icon: '/Users/somebody/images/window.png' });
 console.log(window2.id);
 
-const image = clipboard.readImage();
+const image = nativeImage.createFromPath('/Users/somebody/images/icon.png');
 console.log(image.getSize());
 
 const appIcon3 = new Tray(image);

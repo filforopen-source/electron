@@ -55,7 +55,8 @@ Run these once at the start of each upgrade session:
    - IMPORTANT: Once `git am --continue` succeeds you MUST run `e patches {target}` to export fixes
    - Return to step 1
 4. When `e sync --3` succeeds, run `e patches all`
-5. **Read `references/phase-one-commit-guidelines.md` NOW**, then commit changes following those instructions exactly.
+5. If the sync changed `build/siso_revision` (the `gen_siso_revision` hook rewrites it when the new Chromium pins a different siso), commit that file on its own as `chore: update siso revision`. CI builds siso from this file and gn-check fails the roll if it is stale.
+6. **Read `references/phase-one-commit-guidelines.md` NOW**, then commit changes following those instructions exactly.
 
 ## Commands Reference
 
@@ -141,6 +142,7 @@ The `roller/chromium/main` branch is created by automation to update Electron's 
 6. When `e build` succeeds, run `e start --version`
 7. Check if you have any pending changes in the Chromium repo by running `git status`
     - If you have changes follow the instructions below in "A. Patch Fixes" to correctly commit those modifications into the appropriate patch file
+8. Final commit self-check: run `git log --format='%h %B'` over the commits this upgrade added (everything since the `chore: bump chromium in DEPS` commit) and verify that each upstream CL is referenced by exactly one non-fixup commit — full messages, not just titles, since `Ref:` lines live in commit bodies. If a CL appears in more than one non-fixup commit, consolidate with `git commit --fixup` + autosquash rebase per `references/phase-two-commit-guidelines.md`
 
 ## Commands Reference
 

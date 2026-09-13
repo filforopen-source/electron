@@ -45,9 +45,11 @@ template("electron_repack_percent") {
     sources += [
       "$root_gen_dir/chrome/renderer_resources_${percent}_percent.pak",
       "$root_gen_dir/chrome/theme_resources_${percent}_percent.pak",
+      "$root_gen_dir/chrome/webui_theme_resources_${percent}_percent.pak",
     ]
     deps += [
       "//chrome/app/theme:theme_resources",
+      "//chrome/app/theme:webui_theme_resources",
       "//chrome/renderer:resources",
     ]
 
@@ -138,7 +140,6 @@ template("electron_extra_paks") {
       "$root_gen_dir/content/histograms_resources.pak",
       "$root_gen_dir/content/indexed_db_resources.pak",
       "$root_gen_dir/content/network_errors_resources.pak",
-      "$root_gen_dir/content/private_aggregation_internals_resources.pak",
       "$root_gen_dir/content/process_resources.pak",
       "$root_gen_dir/content/quota_internals_resources.pak",
       "$root_gen_dir/content/service_worker_resources.pak",

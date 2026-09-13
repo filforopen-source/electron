@@ -8,13 +8,11 @@
 #include <utility>
 
 #include "base/functional/bind.h"
-#include "base/memory/ptr_util.h"
 #include "base/path_service.h"
 #include "chrome/browser/extensions/chrome_url_request_util.h"
 #include "chrome/common/chrome_paths.h"
 #include "components/version_info/version_info.h"
 #include "content/public/browser/browser_context.h"
-#include "content/public/browser/browser_task_traits.h"
 #include "content/public/browser/browser_thread.h"
 #include "content/public/browser/frame_tree_node_id.h"
 #include "content/public/browser/render_frame_host.h"
@@ -97,7 +95,8 @@ bool ElectronExtensionsBrowserClient::IsValidContext(void* context) {
 
 bool ElectronExtensionsBrowserClient::IsSameContext(BrowserContext* first,
                                                     BrowserContext* second) {
-  return first == second;
+  // In-memory sessions are off-the-record contexts of the default one.
+  return GetOriginalContext(first) == GetOriginalContext(second);
 }
 
 bool ElectronExtensionsBrowserClient::HasOffTheRecordContext(

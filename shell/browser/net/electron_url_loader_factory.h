@@ -9,7 +9,6 @@
 #include <optional>
 #include <string>
 #include <utility>
-#include <vector>
 
 #include "base/memory/self_deleting.h"
 #include "base/memory/weak_ptr.h"
@@ -38,6 +37,10 @@ class PendingReceiver;
 }  // namespace mojo
 
 namespace electron {
+
+namespace api {
+class SimpleURLLoaderWrapper;
+}
 
 class ElectronBrowserContext;
 
@@ -163,14 +166,22 @@ class ElectronURLLoaderFactory : public network::SelfDeletingURLLoaderFactory {
       network::mojom::URLResponseHeadPtr head,
       const network::ResourceRequest& original_request,
       const base::FilePath& path,
-      const gin_helper::Dictionary& opts);
+      const gin_helper::Dictionary& opts,
+      bool tag_response_opaque);
   static void StartLoadingHttp(
       mojo::PendingRemote<network::mojom::URLLoaderClient> client,
       mojo::PendingReceiver<network::mojom::URLLoader> loader,
       const network::ResourceRequest& original_request,
       const net::MutableNetworkTrafficAnnotationTag& traffic_annotation,
       base::WeakPtr<ElectronBrowserContext> browser_context,
-      const gin_helper::Dictionary& dict);
+      const gin_helper::Dictionary& dict,
+      bool tag_response_opaque);
+  static void StartLoadingRelay(
+      mojo::PendingRemote<network::mojom::URLLoaderClient> client,
+      mojo::PendingReceiver<network::mojom::URLLoader> loader,
+      network::mojom::URLResponseHeadPtr head,
+      api::SimpleURLLoaderWrapper* fetch_loader,
+      std::string prefix);
   static void StartLoadingStream(
       mojo::PendingRemote<network::mojom::URLLoaderClient> client,
       mojo::PendingReceiver<network::mojom::URLLoader> loader,

@@ -19,7 +19,7 @@
 #include "components/upload_list/crash_upload_list.h"
 #include "components/upload_list/text_log_upload_list.h"
 #include "electron/mas.h"
-#include "gin/arguments.h"
+#include "gin/converter.h"
 #include "gin/data_object_builder.h"
 #include "shell/browser/javascript_environment.h"
 #include "shell/common/electron_paths.h"
@@ -169,6 +169,10 @@ void Start(const std::string& submit_url,
 #elif BUILDFLAG(IS_WIN)
   for (const auto& pair : extra)
     electron::crash_keys::SetCrashKey(pair.first, pair.second);
+  // Make electron_wer.dll loadable by Windows Error Reporting for this user
+  // before crashpad registers it, so crashes that bypass the in-process
+  // handler (__fastfail etc.) still produce a minidump.
+  ElectronCrashReporterClient::RegisterWerHelperModuleForCurrentUser();
   base::FilePath user_data_dir;
   base::PathService::Get(chrome::DIR_USER_DATA, &user_data_dir);
   ::crash_reporter::InitializeCrashpadWithEmbeddedHandler(

@@ -1,7 +1,6 @@
 [![Electron Logo](https://electronjs.org/images/electron-logo.svg)](https://electronjs.org)
 
 [![GitHub Actions Build Status](https://github.com/electron/electron/actions/workflows/build.yml/badge.svg)](https://github.com/electron/electron/actions/workflows/build.yml)
-[![Electron Discord Invite](https://img.shields.io/discord/745037351163527189?color=%237289DA&label=chat&logo=discord&logoColor=white)](https://discord.gg/electronjs)
 
 :memo: Available Translations: 🇨🇳 🇧🇷 🇪🇸 🇯🇵 🇷🇺 🇫🇷 🇺🇸 🇩🇪.
 View these docs in other languages on our [Crowdin](https://crowdin.com/project/electron) project.
@@ -39,10 +38,9 @@ Each Electron release provides binaries for macOS, Windows, and Linux.
 
 * macOS (Ventura and up): Electron provides 64-bit Intel and Apple Silicon / ARM binaries for macOS.
 * Windows (Windows 10 and up): Electron provides `x64` (`amd64`) and `arm64` binaries for Windows.
-* Linux: The prebuilt binaries of Electron are built on Ubuntu 22.04. They have also been verified to work on:
-  * Ubuntu 18.04 and newer
-  * Fedora 32 and newer
-  * Debian 10 and newer
+* Linux: Electron provides `x64` (`amd64`) and `arm64` binaries for Linux. Electron supports major Linux distributions (e.g., Ubuntu, Fedora, Debian) in versions that are still supported by both Chromium and the distro maker (without requiring a paid subscription). The prebuilt binaries are built on Ubuntu.
+
+In general, Electron tries to [align with Chromium on platform support](https://support.google.com/chrome/answer/95346).
 
 ## Electron Fiddle
 

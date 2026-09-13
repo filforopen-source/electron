@@ -17,8 +17,9 @@ Allowed commit patterns:
 1. `fixup! <existing-commit-title>` — fixup against another commit on the branch
 2. `chore: bump chromium in DEPS to <version>` — must be the *only* change to `DEPS`, no other files
 3. `chore: update patches` — exact title, no commit body, only non-content patch changes (index hashes, line numbers, hunk headers)
-4. A commit referencing one Chromium CL: title must be exactly `<CL_NUMBER>: <upstream CL's original title>`
-5. A commit referencing multiple Chromium CLs: title is not enforced
+4. `chore: update siso revision` — exact title, the only change is `build/siso_revision` (rewritten by the `gen_siso_revision` sync hook)
+5. A commit referencing one Chromium CL: title must be exactly `<CL_NUMBER>: <upstream CL's original title>`
+6. A commit referencing multiple Chromium CLs: title is not enforced
 
 A Chromium CL is referenced by including the full Gerrit URL anywhere in the commit message, e.g. `Ref: https://chromium-review.googlesource.com/c/chromium/src/+/7536483`. Appending `#nolint` to the URL excludes that CL from validation (and from the single-CL title check).
 
@@ -79,9 +80,29 @@ The commit message MUST be exactly `chore: update patches` — no qualifier, no 
 
 ## Atomic Commits
 
-Each patch conflict fix gets its own commit with its own Ref.
+Each patch conflict fix gets its own commit with its own Ref — one commit per upstream CL.
+
+Never combine unrelated upstream CLs into one commit. Two CLs touching the same `.patch` file is NOT a relationship: when a single patch file contains hunks caused by different upstream CLs (e.g., a formatting CL and an API-removal CL that both drifted the same patch), stage per CL with `git add -p` and commit each CL's hunks separately, so each commit contains only the changes its own CL caused. Multiple `Ref:` lines in one commit are only for changes genuinely motivated by those CLs together (such as the grouped `chore: remove upstreamed patches` case above).
 
 IMPORTANT: Try really hard to find the CL reference per the instructions below. Each change you made should in theory have been in response to a change made in Chromium that you identified or can identify. Try for a while to identify and include the ref in the commit message. Do not give up easily.
+
+## Self-Contained Commits Help Bisecting (Advisory)
+
+Maintainers bisect rolls with build-tools' `e rcv`, which reconstructs intermediate
+Chromium versions by cherry-picking this branch's commits, keyed on the Gerrit CL URL(s)
+in each commit message. Commits without a CL URL are skipped during reconstruction.
+
+The preferences below make reconstructions more accurate. They are nice-to-haves, not
+requirements — completing the roll always comes first:
+
+- Keep the `Ref:` on any commit that changes code or patch content. Reserve Ref-less
+  `chore: update patches` for metadata-only changes (index hashes, line numbers, hunk
+  headers).
+- When practical, fold a CL's patch-file fixes into that CL's own commit rather than a
+  later catch-all `chore: update patches` commit.
+- Squash any `fixup!` commits (e.g. `git rebase --autosquash`) before finishing.
+- Prefer one CL per commit. A commit spanning multiple CLs is fine when the changes are
+  genuinely coupled — include a `Ref:` line for every CL involved.
 
 ## Finding CL References
 

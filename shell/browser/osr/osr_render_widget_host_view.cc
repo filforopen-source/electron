@@ -9,7 +9,6 @@
 #include <optional>
 #include <utility>
 
-#include "base/functional/callback_helpers.h"
 #include "base/location.h"
 #include "base/memory/ptr_util.h"
 #include "base/memory/raw_ptr.h"
@@ -27,16 +26,17 @@
 #include "content/browser/renderer_host/render_widget_host_owner_delegate.h"  // nogncheck
 #include "content/common/input/synthetic_gesture.h"  // nogncheck
 #include "content/common/input/synthetic_gesture_target.h"
-#include "content/public/browser/browser_task_traits.h"
 #include "content/public/browser/browser_thread.h"
 #include "content/public/browser/context_factory.h"
 #include "content/public/browser/gpu_data_manager.h"
 #include "content/public/browser/render_process_host.h"
 #include "shell/browser/osr/osr_host_display_client.h"
+#include "shell/browser/osr/osr_video_consumer.h"
 #include "third_party/blink/public/common/input/web_input_event.h"
 #include "third_party/skia/include/core/SkCanvas.h"
 #include "ui/compositor/compositor.h"
 #include "ui/compositor/layer.h"
+#include "ui/compositor/layer_surface.h"
 #include "ui/compositor/layer_type.h"
 #include "ui/display/screen.h"
 #include "ui/events/base_event_utils.h"
@@ -108,7 +108,7 @@ class ElectronDelegatedFrameHostClient
       const ElectronDelegatedFrameHostClient&) = delete;
 
   // content::DelegatedFrameHostClient
-  [[nodiscard]] ui::Layer* DelegatedFrameHostGetLayer() const override {
+  [[nodiscard]] ui::LayerSurface* GetDelegatedFrameHostLayer() const override {
     return view_->root_layer();
   }
 
@@ -193,9 +193,10 @@ OffScreenRenderWidgetHostView::OffScreenRenderWidgetHostView(
   compositor_allocator_.GenerateId();
   compositor_surface_id_ = compositor_allocator_.GetCurrentLocalSurfaceId();
 
-  root_layer_ = std::make_unique<ui::LayerSolidColor>();
+  root_layer_ = std::make_unique<ui::LayerSurface>();
 
-  root_layer()->SetColor(background_color_);
+  root_layer()->SetFallbackBackgroundColor(
+      SkColor4f::FromColor(background_color_));
 
   ui::ContextFactory* context_factory = content::GetContextFactory();
   compositor_ = std::make_unique<ui::Compositor>(
@@ -514,27 +515,6 @@ gfx::Size OffScreenRenderWidgetHostView::GetCompositorViewportPixelSize() {
 
 ui::Compositor* OffScreenRenderWidgetHostView::GetCompositor() {
   return compositor_.get();
-}
-
-content::RenderWidgetHostViewBase*
-OffScreenRenderWidgetHostView::CreateViewForWidget(
-    content::RenderWidgetHost* render_widget_host,
-    content::RenderWidgetHost* embedder_render_widget_host,
-    content::WebContentsView* web_contents_view) {
-  if (auto* rwhv = render_widget_host->GetView())
-    return static_cast<content::RenderWidgetHostViewBase*>(rwhv);
-
-  OffScreenRenderWidgetHostView* embedder_host_view = nullptr;
-  if (embedder_render_widget_host) {
-    embedder_host_view = static_cast<OffScreenRenderWidgetHostView*>(
-        embedder_render_widget_host->GetView());
-  }
-
-  return new OffScreenRenderWidgetHostView(
-      transparent_, offscreen_use_shared_texture_,
-      offscreen_shared_texture_pixel_format_, offscreen_device_scale_factor_,
-      true, embedder_host_view->frame_rate(), callback_, render_widget_host,
-      embedder_host_view, size());
 }
 
 const viz::FrameSinkId& OffScreenRenderWidgetHostView::GetFrameSinkId() const {
@@ -1022,7 +1002,7 @@ void OffScreenRenderWidgetHostView::UpdateBackgroundColorFromRenderer(
     return;
   background_color_ = color;
 
-  root_layer()->SetColor(color);
+  root_layer()->SetFallbackBackgroundColor(SkColor4f::FromColor(color));
 }
 
 void OffScreenRenderWidgetHostView::NotifyHostAndDelegateOnWasShown(

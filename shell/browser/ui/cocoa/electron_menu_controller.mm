@@ -12,7 +12,6 @@
 #include "base/functional/callback.h"
 #include "base/strings/sys_string_conversions.h"
 #include "base/strings/utf_string_conversions.h"
-#include "content/public/browser/browser_task_traits.h"
 #include "content/public/browser/browser_thread.h"
 #include "net/base/apple/url_conversions.h"
 #include "shell/browser/mac/electron_application.h"
@@ -115,6 +114,25 @@ NSArray* ConvertSharingItemToNS(const SharingItem& item) {
       [result addObject:net::NSURLWithGURL(url)];
   }
   return result;
+}
+
+// Convert a Badge to an NSMenuItemBadge, or nil if it has nothing to show.
+NSMenuItemBadge* CreateBadge(const electron::ElectronMenuModel::Badge& badge)
+    API_AVAILABLE(macos(14.0)) {
+  if (badge.type == "none") {
+    if (!badge.content)
+      return nil;
+    return [[NSMenuItemBadge alloc]
+        initWithString:base::SysUTF8ToNSString(*badge.content)];
+  }
+  const NSInteger count = badge.count.value_or(0);
+  if (badge.type == "alerts")
+    return [NSMenuItemBadge alertsWithCount:count];
+  if (badge.type == "updates")
+    return [NSMenuItemBadge updatesWithCount:count];
+  if (badge.type == "new-items")
+    return [NSMenuItemBadge newItemsWithCount:count];
+  return nil;
 }
 
 }  // namespace
@@ -261,6 +279,8 @@ NSArray* ConvertSharingItemToNS(const SharingItem& item) {
   const NSInteger count = source.numberOfItems;
   for (NSInteger index = 0; index < count; index++) {
     NSMenuItem* removedItem = [source itemAtIndex:0];
+    if (!removedItem)
+      return;
     [source removeItemAtIndex:0];
     [destination addItem:removedItem];
   }
@@ -369,6 +389,12 @@ NSArray* ConvertSharingItemToNS(const SharingItem& item) {
 
   std::u16string toolTip = model->GetToolTipAt(index);
   item.toolTip = base::SysUTF16ToNSString(toolTip);
+
+  if (@available(macOS 14, *)) {
+    electron::ElectronMenuModel::Badge badge;
+    if (model->GetBadgeAt(index, &badge))
+      item.badge = CreateBadge(badge);
+  }
 
   if (role == u"services") {
     std::u16string title = u"Services";
@@ -552,6 +578,11 @@ NSArray* ConvertSharingItemToNS(const SharingItem& item) {
         }
       }
     }
+  }
+
+  if (@available(macOS 14, *)) {
+    electron::ElectronMenuModel::Badge badge;
+    item.badge = model->GetBadgeAt(index, &badge) ? CreateBadge(badge) : nil;
   }
 }
 
